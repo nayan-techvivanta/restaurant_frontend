@@ -1,14 +1,12 @@
+
 import React, { useEffect, useState } from "react";
 import { FiMail, FiLock, FiArrowRight, FiEye, FiEyeOff } from "react-icons/fi";
-import Logo from "../../assets/images/Loginpage/Logo.png";
-import bg01 from "../../assets/images/Loginpage/bg01.jpg";
-import bg02 from "../../assets/images/Loginpage/bg02.jpg";
-import bg03 from "../../assets/images/Loginpage/bg03.jpg";
-import bg04 from "../../assets/images/Loginpage/bg04.jpg";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../../api/axiosInstance";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import Logo from "../../assets/images/Loginpage/Logo.png";
+import bg02 from "../../assets/images/Loginpage/bg02.jpg";
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -18,7 +16,6 @@ export default function Login() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
   const navigate = useNavigate();
 
   const togglePasswordVisibility = () => {
@@ -35,66 +32,89 @@ export default function Login() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
+  e.preventDefault();
+  setIsLoading(true);
 
-    try {
-      // Basic validation
-      if (!formData.email || !formData.password) {
-        toast.error("Please fill in all fields");
-        return;
-      }
+  try {
+    if (!formData.email || !formData.password) {
+      toast.error("Please fill in all fields");
+      return;
+    }
 
-      // Email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        toast.error("Please enter a valid email address");
-        return;
-      }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
 
-      const response = await axiosInstance.post("/api/v1/auth/login-email", {
-        email: formData.email,
-        password: formData.password,
-        type: "staff",
-      });
+    const response = await axiosInstance.post("/api/v1/auth/login-email", {
+      email: formData.email,
+      password: formData.password,
+      type: "staff",
+    });
 
-      const data = response.data;
+    const data = response.data;
+    console.log("Login Response:", data);
 
-      const token = data?.data?.access_token;
+    // ✅ ONLY extract user_id and is_email_verified
+    const userId = data?.data?.user_id || data?.data?.id;
+    const userData = data?.data;
+    const isEmailVerified = userData?.is_email_verified;
 
-      if (!token) {
-        toast.error("Token not received from server");
-        return;
-      }
+    console.log("User ID:", userId, "Email Verified:", isEmailVerified);
 
-      
-      localStorage.setItem("access_token", token);
+    // ✅ ONLY check if userId exists
+    if (!userId) {
+      toast.error("Login failed. User data not found.");
+      return;
+    }
+
+    // ✅ Store user data for verification page
+    localStorage.setItem("temp_user_id", userId);
+    localStorage.setItem("temp_user_email", userData?.email || formData.email);
+    localStorage.setItem("temp_user_data", JSON.stringify(userData));
+
+    if (isEmailVerified) {
+      // ✅ EMAIL VERIFIED = Direct Dashboard
       localStorage.setItem("isAuthenticated", "true");
-      localStorage.setItem("userEmail", data?.data?.email || formData.email);
-
-      toast.success("Login successful!");
-
-      // Redirect after short delay
+      localStorage.setItem("userEmail", userData?.email);
+      localStorage.setItem("userData", JSON.stringify(userData));
+      
+      toast.success("Login successful! Welcome back.");
       setTimeout(() => {
         navigate("/dashboard", { replace: true });
       }, 1000);
-    } catch (err) {
-      console.error("Login error:", err);
-
-      // API error handling
-      if (err.response?.data?.message) {
-        toast.error(err.response.data.message);
-      } else if (err.response?.status === 401) {
-        toast.error("Invalid email or password");
-      } else if (err.code === "ERR_NETWORK") {
-        toast.error("Network error. Please check your internet connection.");
-      } else {
-        toast.error("Login failed. Please try again.");
-      }
-    } finally {
-      setIsLoading(false);
+    } else {
+      // ✅ EMAIL NOT VERIFIED = Verify OTP Page
+      toast.success("Please verify your email to continue.");
+      setTimeout(() => {
+        navigate(`/verifyemail/${userId}`);
+      }, 1000);
     }
-  };
+
+  } catch (err) {
+    console.error("Login error:", err);
+    if (err.response?.data?.message) {
+      toast.error(err.response.data.message);
+    } else if (err.response?.status === 401) {
+      toast.error("Invalid email or password");
+    } else {
+      toast.error("Login failed. Please try again.");
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
+  // Check if user is already authenticated
+  useEffect(() => {
+    const isAuthenticated = localStorage.getItem("isAuthenticated");
+    const token = localStorage.getItem("access_token");
+    if (isAuthenticated === "true" && token) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate]);
 
   return (
     <div
@@ -112,13 +132,11 @@ export default function Login() {
         pauseOnHover
       />
 
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/40"></div>
 
       {/* Main Container */}
       <div className="relative w-full max-w-7xl flex flex-col lg:flex-row items-center justify-center lg:justify-between z-10 lg:ps-10 gap-8 lg:gap-0">
         <div className="hidden md:block text-white max-w-xl space-y-4 lg:space-y-6 m-auto">
-          {/* Title */}
           <h1 className="text-4xl sm:text-5xl xl:text-7xl font-extrabold leading-tight">
             <span className="text-gray-100 block">Welcome To</span>
             <span
@@ -132,19 +150,13 @@ export default function Login() {
               Restaurant Vivanta
             </span>
           </h1>
-
-          {/* Underline */}
           <div className="h-1 w-20 lg:w-24 bg-yellow-400 rounded-full shadow-md"></div>
-
-          {/* Description */}
           <p className="text-base sm:text-lg xl:text-xl text-gray-200 leading-relaxed tracking-wide">
-            Experience a seamless login experience with industry-level security.
-            Enjoy a clean, fast, and user-friendly dashboard trusted by
-            professionals across the hospitality sector.
+            Complete your email verification to access your secure dashboard.
           </p>
         </div>
 
-        {/* Mobile Header - Only shows on small screens */}
+        {/* Mobile Header */}
         <div className="md:hidden text-white text-center w-full max-w-md">
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-2">
             <span className="text-gray-100 block">Welcome To</span>
@@ -167,20 +179,11 @@ export default function Login() {
 
         {/* Login Form */}
         <div className="w-full max-w-md sm:max-w-lg bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl rounded-2xl p-6 sm:p-8">
-          {/* Logo */}
-          <div className="flex justify-center ">
+          <div className="flex justify-center">
             <img
               src={Logo}
               alt="Hotel Vivanta Logo"
-              className="
-              w-24        
-              sm:w-32     
-              md:w-36     
-              lg:w-40     
-              xl:w-44     
-              object-contain 
-              drop-shadow-lg
-    "
+              className="w-24 sm:w-32 md:w-36 lg:w-40 xl:w-44 object-contain drop-shadow-lg"
             />
           </div>
 
@@ -191,7 +194,6 @@ export default function Login() {
           </div>
 
           <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
-            {/* Email Field */}
             <div>
               <label className="text-white font-medium mb-2 block text-sm sm:text-base">
                 Email Address
@@ -210,7 +212,6 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label className="text-white font-medium mb-2 block text-sm sm:text-base">
                 Password
@@ -226,7 +227,6 @@ export default function Login() {
                   placeholder="Enter your password"
                   required
                 />
-                {/* Password Toggle Button */}
                 <button
                   type="button"
                   onClick={togglePasswordVisibility}
@@ -241,7 +241,6 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Remember Me & Forgot Password */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
               <label className="flex items-center text-gray-300 cursor-pointer text-sm sm:text-base">
                 <input
@@ -261,7 +260,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 sm:py-3.5 text-base sm:text-lg font-semibold rounded-xl bg-linear-to-r from-yellow-500 to-yellow-600 text-black shadow-lg hover:shadow-yellow-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-2"
+              className="w-full py-3 sm:py-3.5 text-base sm:text-lg font-semibold rounded-xl bg-gradient-to-r from-yellow-500 to-yellow-600 text-black shadow-lg hover:shadow-yellow-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-2"
             >
               {isLoading ? (
                 <>
@@ -296,12 +295,10 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Sign Up Link */}
-          <p className="text-center texat-gray-300 mt-6 sm:mt-8 text-sm sm:text-base">
+          <p className="text-center text-gray-300 mt-6 sm:mt-8 text-sm sm:text-base">
             Don't have an account?{" "}
             <button
               type="button"
-              // onClick={() => navigate("/register")}
               className="text-[#F5C857] font-semibold hover:text-yellow-300 transition-colors duration-300"
             >
               Create Account

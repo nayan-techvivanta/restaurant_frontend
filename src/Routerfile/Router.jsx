@@ -14,6 +14,7 @@ import OrderList from "../pages/main/OrderList";
 import MenuManagement from "../pages/main/MenuManagement";
 import Settings from "../pages/main/Settings";
 import PrintReceipt from "../components/Order/PrintReceipt";
+import VerifyOtp from "../pages/auth/VerifyOtp";
 
 export default function AppRouter() {
   return (
@@ -22,6 +23,7 @@ export default function AppRouter() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verifyemail/:userId" element={<VerifyOtp />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/orders" element={<OrderList />} />
