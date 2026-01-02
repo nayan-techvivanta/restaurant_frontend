@@ -14,6 +14,7 @@ import MenuManagement from "../pages/main/MenuManagement";
 import Settings from "../pages/main/Settings";
 import PrintReceipt from "../components/Order/PrintReceipt";
 import VerifyOtp from "../pages/auth/VerifyOtp";
+import TableList from "../pages/main/TableList";
 
 export default function AppRouter() {
   return (
@@ -28,6 +29,7 @@ export default function AppRouter() {
           <Route path="/menu" element={<MenuManagement />} />
           <Route path="/create_order" element={<CreateOrder />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/tables" element={<TableList />} />
         </Route>
         <Route path="/print-receipt" element={<PrintReceipt />} />
       </Routes>

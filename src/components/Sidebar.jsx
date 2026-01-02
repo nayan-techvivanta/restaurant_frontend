@@ -18,6 +18,7 @@ import {
   Analytics as AnalyticsIcon,
   Settings as SettingsIcon,
 } from "@mui/icons-material";
+import TableBarRoundedIcon from '@mui/icons-material/TableBarRounded';
 import FastfoodIcon from "@mui/icons-material/Fastfood";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
@@ -27,7 +28,7 @@ const Sidebar = ({ drawerWidth, mobileOpen, handleDrawerToggle, isMobile }) => {
   const navigate = useNavigate();
   const handleLogout = () => {
     localStorage.clear();
-    navigate("/login", { replace: true }); 
+    navigate("/login", { replace: true });
   };
   const menuItems = [
     { path: "/dashboard", label: "Dashboard", icon: <DashboardIcon /> },
@@ -35,6 +36,7 @@ const Sidebar = ({ drawerWidth, mobileOpen, handleDrawerToggle, isMobile }) => {
     { path: "/orders", label: "Orders", icon: <AssignmentIcon /> },
     { path: "/menu", label: "Menu", icon: <RestaurantIcon /> },
     { path: "/settings", label: "Settings", icon: <SettingsIcon /> },
+    { path: "/tables", label: "Tables", icon: <TableBarRoundedIcon /> },
   ];
 
   const drawer = (
@@ -112,7 +114,7 @@ const Sidebar = ({ drawerWidth, mobileOpen, handleDrawerToggle, isMobile }) => {
       <Box sx={{ p: 2, mt: "auto" }}>
         <Divider sx={{ mb: 2 }} />
         <ListItemButton
-          onClick={handleLogout}  
+          onClick={handleLogout}
           sx={{
             borderRadius: 2,
             color: "error.main",
