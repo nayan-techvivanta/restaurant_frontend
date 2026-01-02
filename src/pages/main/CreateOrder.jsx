@@ -21,6 +21,7 @@ import { FaUtensils } from "react-icons/fa";
 import axiosInstance from "../../api/axiosInstance";
 import { MdOutlineFastfood } from "react-icons/md";
 import { IoRestaurantOutline } from "react-icons/io5";
+import { toast } from "react-toastify";
 
 export default function CreateOrder() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,8 +39,11 @@ export default function CreateOrder() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [limit] = useState(100);
-
+  // Add these new states
+  const [showExtraModal, setShowExtraModal] = useState(false);
+  const [selectedMainItem, setSelectedMainItem] = useState(null);
+  const [extraItemsForMainItem, setExtraItemsForMainItem] = useState([]);
+  const [limit] = useState(1000);
 
   const primaryColor = "#F5C857";
   const primaryLight = "#FEF6E6";
@@ -72,7 +76,6 @@ export default function CreateOrder() {
       if (response.data?.data) {
         const allItems = response.data.data;
 
-        // ✅ Extract UNIQUE categories from items
         const uniqueCategories = [
           { id: "all", name: "All Items", icon: FaUtensils },
           ...Array.from(
@@ -85,10 +88,8 @@ export default function CreateOrder() {
         ];
         setCategories(uniqueCategories);
 
-        // ✅ Show ALL items (PRODUCT + COMBO) - Remove VEG filter
         setFoodItems(allItems);
 
-        // Pagination
         if (response.data.pagination) {
           setTotalPages(response.data.pagination.totalPages || 1);
           setTotalItems(response.data.pagination.total || 0);
@@ -142,10 +143,81 @@ export default function CreateOrder() {
             quantity: 1,
             itemId: item.id,
             itemNotes: item.itemNotes || "",
+            extra: [],
           },
         ];
       }
     });
+  };
+
+  const openExtraModal = (mainItem) => {
+    setSelectedMainItem(mainItem);
+    setExtraItemsForMainItem(mainItem.extra || []);
+    setShowExtraModal(true);
+  };
+
+  const closeExtraModal = () => {
+    setShowExtraModal(false);
+    setSelectedMainItem(null);
+    setExtraItemsForMainItem([]);
+  };
+
+  const addExtraToMainItem = (extraItem) => {
+    setExtraItemsForMainItem((prev) => {
+      const exists = prev.find((i) => i.id === extraItem.id);
+      if (exists) {
+        return prev.map((i) =>
+          i.id === extraItem.id ? { ...i, quantity: i.quantity + 1 } : i
+        );
+      } else {
+        return [
+          ...prev,
+          {
+            ...extraItem,
+            quantity: 1,
+            itemId: extraItem.id,
+          },
+        ];
+      }
+    });
+  };
+
+  const updateExtraQuantity = (extraItemId, change) => {
+    setExtraItemsForMainItem((prev) =>
+      prev
+        .map((item) => {
+          if (item.id === extraItemId || item.itemId === extraItemId) {
+            const newQuantity = item.quantity + change;
+            if (newQuantity < 1) {
+              return null;
+            }
+            return { ...item, quantity: newQuantity };
+          }
+          return item;
+        })
+        .filter(Boolean)
+    );
+  };
+
+  const removeExtraFromMainItem = (extraItemId) => {
+    setExtraItemsForMainItem((prev) =>
+      prev.filter(
+        (item) => item.id !== extraItemId && item.itemId !== extraItemId
+      )
+    );
+  };
+
+  const saveExtraItems = () => {
+    if (selectedMainItem) {
+      setOrderItems((prev) =>
+        prev.map((item) =>
+          item.id === selectedMainItem.id
+            ? { ...item, extra: extraItemsForMainItem }
+            : item
+        )
+      );
+    }
+    closeExtraModal();
   };
 
   const updateQuantity = (itemId, change) => {
@@ -181,114 +253,37 @@ export default function CreateOrder() {
   //   );
   // };
 
+  // const calculateSubtotal = () => {
+  //   return orderItems.reduce(
+  //     (total, item) => total + (item.price || 0) * (item.quantity || 1),
+  //     0
+  //   );
+  // };
+
   const calculateSubtotal = () => {
-    return orderItems.reduce(
-      (total, item) => total + (item.price || 0) * (item.quantity || 1),
-      0
-    );
+    return orderItems.reduce((total, item) => {
+      const mainItemTotal = (item.price || 0) * (item.quantity || 1);
+      const extraTotal = item.extra
+        ? item.extra.reduce(
+            (extraSum, extra) =>
+              extraSum + (extra.price || 0) * (extra.quantity || 1),
+            0
+          ) * (item.quantity || 1)
+        : 0;
+      return total + mainItemTotal + extraTotal;
+    }, 0);
   };
 
   const calculateTotal = () => {
     return calculateSubtotal();
   };
 
-
-  //   const confirmOrder = async () => {
-  //   if (orderItems.length === 0) {
-  //     alert("Please add items to your order");
-  //     return;
-  //   }
-
-  //   try {
-  //     setPlacingOrder(true);
-
-  //     const products = orderItems
-  //       .filter((item) => item.item_type === "PRODUCT")
-  //       .map((item) => ({
-  //         product_id: item.id,
-  //         quantity: item.quantity || 1,
-  //       }));
-
-  //     const combos = orderItems
-  //       .filter((item) => item.item_type === "COMBO")
-  //       .map((item) => ({
-  //         combo_id: item.id,
-  //         quantity: item.quantity || 1,
-  //       }));
-
-  //     // FINAL PAYLOAD FOR API
-  //     const payload = {
-  //       ...(products.length > 0 && { items: products }),
-  //       ...(combos.length > 0 && { combos: combos }),
-  //       notes: orderNotes || "", // ⭐ add global note
-  //     };
-
-  //     const response = await axiosInstance.post("/api/v1/order/add", payload);
-
-  //     if (response.data?.data) {
-  //       // Use token from API response instead of generating random
-  //       const token = response.data.data.token;
-
-  //       setGeneratedToken(token);
-  //       setShowOrderSuccess(true);
-
-  //       // Prepare order data for receipt
-  //       const orderData = {
-  //         token: token,
-  //         orderId: response.data.data.id, // Add order ID from API
-  //         items: response.data.data.items.map((item) => ({
-  //           name: item.name,
-  //           quantity: item.quantity,
-  //           price: item.price,
-  //           type: item.type,
-  //           total: item.price * item.quantity,
-  //         })),
-  //         combos: orderItems.filter(item => item.item_type === "COMBO").map(combo => ({
-  //           name: combo.name,
-  //           quantity: combo.quantity,
-  //           price: combo.price,
-  //           details: combo.details,
-  //         })),
-  //         subtotal: calculateSubtotal(),
-  //         grand_total: response.data.data.grand_total, 
-  //         notes: response.data.data.notes || orderNotes,
-  //         restaurant: response.data.data.restaurant,
-  //         status: response.data.data.status,
-  //         timestamp: response.data.data.created_at,
-  //         originalItems: orderItems.map((item) => ({
-  //           ...item,
-  //           price: item.price || 0,
-  //           quantity: item.quantity || 1,
-  //         })),
-  //       };
-
-  //       const printUrl = `/print-receipt?token=${token}&data=${encodeURIComponent(
-  //         JSON.stringify(orderData)
-  //       )}`;
-
-  //       window.open(printUrl, "_blank");
-
-  //       sendToKitchen(token);
-
-  //       setTimeout(() => {
-  //         setOrderItems([]);
-  //         setOrderNotes("");
-  //         setShowOrderSuccess(false);
-  //       }, 5000);
-  //     }
-  //   } catch (error) {
-  //     console.error("Order API Failed:", error);
-  //     alert("Failed to place order. Please try again.");
-  //   } finally {
-  //     setPlacingOrder(false);
-  //   }
-  // };  
   const navigate = useNavigate();
 
   // Print & Confirm Flow
   const confirmOrder = async () => {
     if (orderItems.length === 0) {
-      alert("Please add items to your order");
+      toast.error("Please add items to your order");
       return;
     }
 
@@ -300,6 +295,13 @@ export default function CreateOrder() {
         .map((item) => ({
           product_id: item.id,
           quantity: item.quantity || 1,
+          extra:
+            item.extra && item.extra.length > 0
+              ? item.extra.map((extra) => ({
+                  product_id: extra.id,
+                  quantity: extra.quantity || 1,
+                }))
+              : null,
         }));
 
       const combos = orderItems
@@ -315,7 +317,7 @@ export default function CreateOrder() {
         ...(orderNotes?.trim() && { notes: orderNotes.trim() }),
       };
 
-      // 1. Call order API
+      //  Call order API
       const response = await axiosInstance.post("/api/v1/order/add", payload);
 
       if (response.data?.data) {
@@ -335,10 +337,11 @@ export default function CreateOrder() {
             price: item.price || 0,
             type: item.item_type || "PRODUCT",
             itemNotes: item.itemNotes || "",
+            extra: item.extra || [],
           })),
           combos: orderItems
-            .filter(item => item.item_type === "COMBO")
-            .map(combo => ({
+            .filter((item) => item.item_type === "COMBO")
+            .map((combo) => ({
               name: combo.name,
               quantity: combo.quantity || 1,
               price: combo.price || 0,
@@ -350,9 +353,9 @@ export default function CreateOrder() {
           notes: response.data.data.notes || orderNotes,
           restaurant: response.data.data.restaurant || "Vivanta",
           status: response.data.data.status || "PLACED",
-          timestamp: response.data.data.created_at || new Date().toLocaleString(),
+          timestamp:
+            response.data.data.created_at || new Date().toLocaleString(),
         };
-
 
         const encodedData = encodeURIComponent(JSON.stringify(orderData));
 
@@ -412,9 +415,11 @@ export default function CreateOrder() {
                     Order #{generatedToken} Confirmed!
                   </h3>
                   <p className="text-sm opacity-90">
-                    Order ID: <span className="font-bold text-yellow-300">
+                    Order ID:{" "}
+                    <span className="font-bold text-yellow-300">
                       #{generatedToken}
-                    </span> sent to kitchen
+                    </span>{" "}
+                    sent to kitchen
                   </p>
                   <p className="text-xs mt-1 opacity-80">
                     Status: PLACED • Preparing your delicious veg meal...
@@ -477,16 +482,17 @@ export default function CreateOrder() {
                 <motion.button
                   key={type}
                   onClick={() => handleItemTypeChange(type)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all flex items-center gap-2 ${itemType === type
-                    ? "bg-yellow-500/10 text-[#F5C857] border-[#F5C857] shadow-md"
-                    : "bg-white text-gray-700 border-gray-200 hover:border-yellow-500 hover:text-yellow-500"
-                    }`}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all flex items-center gap-2 ${
+                    itemType === type
+                      ? "bg-yellow-500/10 text-[#F5C857] border-[#F5C857] shadow-md"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-yellow-500 hover:text-yellow-500"
+                  }`}
                 >
                   {type === "COMBO"
                     ? "🍽️ Combo"
                     : type === "PRODUCT"
-                      ? "🍛 Product"
-                      : "📦 All"}
+                    ? "🍛 Product"
+                    : "📦 All"}
                 </motion.button>
               ))}
             </div>
@@ -497,10 +503,11 @@ export default function CreateOrder() {
                 <motion.button
                   key={category.id}
                   onClick={() => handleCategoryChange(category.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${selectedCategory === category.id
-                    ? "bg-yellow-500/10 text-[#F5C857] border-[#F5C857] shadow-md"
-                    : "bg-white text-gray-700 border-gray-200 hover:border-yellow-500 hover:text-yellow-500"
-                    }`}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
+                    selectedCategory === category.id
+                      ? "bg-yellow-500/10 text-[#F5C857] border-[#F5C857] shadow-md"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-yellow-500 hover:text-yellow-500"
+                  }`}
                 >
                   {category.name}
                 </motion.button>
@@ -636,10 +643,11 @@ export default function CreateOrder() {
                         <button
                           onClick={() => handlePageChange(currentPage - 1)}
                           disabled={currentPage === 1}
-                          className={`p-2 rounded-lg ${currentPage === 1
-                            ? "text-gray-400 cursor-not-allowed"
-                            : "text-gray-700 hover:bg-amber-50 hover:text-amber-600"
-                            }`}
+                          className={`p-2 rounded-lg ${
+                            currentPage === 1
+                              ? "text-gray-400 cursor-not-allowed"
+                              : "text-gray-700 hover:bg-amber-50 hover:text-amber-600"
+                          }`}
                         >
                           <ChevronLeft className="w-5 h-5" />
                         </button>
@@ -662,10 +670,11 @@ export default function CreateOrder() {
                               <button
                                 key={pageNum}
                                 onClick={() => handlePageChange(pageNum)}
-                                className={`w-10 h-10 rounded-lg font-medium ${currentPage === pageNum
-                                  ? "bg-[#F5C857] text-white"
-                                  : "text-gray-700 hover:bg-amber-50"
-                                  }`}
+                                className={`w-10 h-10 rounded-lg font-medium ${
+                                  currentPage === pageNum
+                                    ? "bg-[#F5C857] text-white"
+                                    : "text-gray-700 hover:bg-amber-50"
+                                }`}
                               >
                                 {pageNum}
                               </button>
@@ -676,10 +685,11 @@ export default function CreateOrder() {
                         <button
                           onClick={() => handlePageChange(currentPage + 1)}
                           disabled={currentPage === totalPages}
-                          className={`p-2 rounded-lg ${currentPage === totalPages
-                            ? "text-gray-400 cursor-not-allowed"
-                            : "text-gray-700 hover:bg-amber-50 hover:text-amber-600"
-                            }`}
+                          className={`p-2 rounded-lg ${
+                            currentPage === totalPages
+                              ? "text-gray-400 cursor-not-allowed"
+                              : "text-gray-700 hover:bg-amber-50 hover:text-amber-600"
+                          }`}
                         >
                           <ChevronRight className="w-5 h-5" />
                         </button>
@@ -717,8 +727,8 @@ export default function CreateOrder() {
                   {orderItems.length === 0
                     ? "Add Delicious Food Items to begin"
                     : `${orderItems.length} items • ₹${calculateTotal().toFixed(
-                      2
-                    )}`}
+                        2
+                      )}`}
                 </div>
               </div>
             </div>
@@ -759,10 +769,11 @@ export default function CreateOrder() {
                             </h4>
 
                             <span
-                              className={`text-xs px-2 py-1 rounded-full font-semibold ${item.item_type === "COMBO"
-                                ? "bg-orange-100 text-orange-800"
-                                : "bg-green-100 text-green-800"
-                                }`}
+                              className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                                item.item_type === "COMBO"
+                                  ? "bg-orange-100 text-orange-800"
+                                  : "bg-green-100 text-green-800"
+                              }`}
                             >
                               {item.item_type === "COMBO" ? "Combo" : "Product"}
                             </span>
@@ -833,9 +844,65 @@ export default function CreateOrder() {
                           ₹{(item.price || 0) * (item.quantity || 1)}
                         </div>
                       </div>
+                      {item.item_type === "PRODUCT" && (
+                        <button
+                          onClick={() => openExtraModal(item)}
+                          className="w-full mb-3 px-3 py-2 
+      bg-yellow-50 
+      border-2 border-dashed border-yellow-400 
+      text-yellow-700 text-sm rounded-lg 
+      hover:bg-yellow-100 
+      transition-all 
+      flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-4 h-4 text-yellow-600" />
+                          Add Extra Items
+                          {item.extra && item.extra.length > 0 && (
+                            <span className="bg-yellow-400 text-white px-2 py-0.5 rounded-full text-xs font-bold">
+                              {item.extra.length} extras
+                            </span>
+                          )}
+                        </button>
+                      )}
 
+                      {/* Extras List */}
+                      {item.extra && item.extra.length > 0 && (
+                        <div className="mb-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold text-yellow-800">
+                              Extras:
+                            </span>
 
+                            <button
+                              onClick={() => openExtraModal(item)}
+                              className="text-xs text-yellow-600 hover:text-yellow-800 underline"
+                            >
+                              Edit
+                            </button>
+                          </div>
 
+                          <div className="space-y-1 max-h-20 overflow-y-auto">
+                            {item.extra.map((extra) => (
+                              <div
+                                key={extra.id}
+                                className="flex justify-between items-center 
+                                   text-md text-yellow-600 
+                                  bg-white 
+                                  px-2 py-1 
+                                  rounded 
+                                  border border-yellow-100"
+                              >
+                                <span>
+                                  {extra.name} × {extra.quantity}
+                                </span>
+                                <span className="font-semibold">
+                                  ₹{(extra.price || 0) * extra.quantity}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </motion.div>
                   ))}
                 </AnimatePresence>
@@ -846,13 +913,7 @@ export default function CreateOrder() {
             {orderItems.length > 0 && (
               <div className="p-6 bg-linear-to-b from-amber-50/50 to-transparent border-t border-amber-100">
                 <div className="space-y-4 mb-8">
-                  <div className="flex justify-between items-center py-2 border-b border-amber-100">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span className="font-bold text-gray-900">
-                      ₹{calculateSubtotal().toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pt-4">
+                  <div className="flex justify-between items-center ">
                     <span className="text-xl font-bold text-gray-900">
                       Total Amount
                     </span>
@@ -883,10 +944,11 @@ export default function CreateOrder() {
                   <button
                     onClick={confirmOrder}
                     disabled={placingOrder}
-                    className={`w-full px-6 py-4 font-bold rounded-xl flex items-center justify-center gap-3 transition-all duration-300 ${placingOrder
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-linear-to-r from-[#F5C857] to-[#F8D775] text-white hover:shadow-xl hover:scale-[1.02] cursor-pointer"
-                      }`}
+                    className={`w-full px-6 py-4 font-bold rounded-xl flex items-center justify-center gap-3 transition-all duration-300 ${
+                      placingOrder
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-linear-to-r from-[#F5C857] to-[#F8D775] text-white hover:shadow-xl hover:scale-[1.02] cursor-pointer"
+                    }`}
                   >
                     {/* <CheckCircle2 className="w-6 h-6" /> */}
                     {placingOrder
@@ -905,6 +967,163 @@ export default function CreateOrder() {
             )}
           </motion.div>
         </div>
+        {/* Extra Items Modal - NEW */}
+        <AnimatePresence>
+          {showExtraModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 mt-7"
+              onClick={closeExtraModal}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="bg-linear-to-r from-yellow-400 to-yellow-500 p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white/20 p-2 rounded-xl">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold">Add Extra Items</h3>
+                        <p className="text-yellow-100">
+                          {selectedMainItem?.name}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={closeExtraModal}
+                      className="p-2 hover:bg-white/20 rounded-xl transition-all"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-6 max-h-[60vh] overflow-y-auto">
+                  {loadingFood ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto"></div>
+                      <p className="mt-2 text-gray-500">
+                        Loading extra items...
+                      </p>
+                    </div>
+                  ) : foodItems.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-gray-500">No extra items available</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {foodItems
+                        .filter((foodItem) => foodItem.item_type === "PRODUCT")
+                        .map((extraItem) => (
+                          <div
+                            key={extraItem.id}
+                            className="group relative 
+                      bg-linear-to-b from-white to-yellow-50 
+                      border-2 border-yellow-100 
+                      rounded-xl p-4 
+                      hover:shadow-lg hover:border-yellow-300 
+                      transition-all cursor-pointer"
+                          >
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                <h4 className="font-bold text-gray-900 text-sm mb-1">
+                                  {extraItem.name}
+                                </h4>
+                                <p className="text-xs text-gray-600 mb-2">
+                                  {extraItem.description || "Extra item"}
+                                </p>
+                                <div className="text-lg font-bold text-yellow-600">
+                                  ₹{extraItem.price}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Quantity Controls */}
+                            <div className="flex items-center justify-between pt-2 border-t border-yellow-100">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() =>
+                                    updateExtraQuantity(extraItem.id, -1)
+                                  }
+                                  className="w-8 h-8 rounded-full 
+                            bg-yellow-50 
+                            border border-yellow-200 
+                            flex items-center justify-center 
+                            hover:bg-yellow-100 
+                            transition-colors 
+                            text-yellow-700"
+                                >
+                                  <Minus className="w-4 h-4" />
+                                </button>
+
+                                <span className="w-8 text-center font-bold text-lg text-gray-900">
+                                  {extraItemsForMainItem.find(
+                                    (e) => e.id === extraItem.id
+                                  )?.quantity || 0}
+                                </span>
+
+                                <button
+                                  onClick={() => addExtraToMainItem(extraItem)}
+                                  className="w-8 h-8 rounded-full 
+                            bg-linear-to-r from-yellow-400 to-yellow-500 
+                            text-white 
+                            flex items-center justify-center 
+                            hover:shadow-md 
+                            transition-all"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-6 bg-yellow-50 border-t border-yellow-200 flex gap-3 justify-end">
+                  <button
+                    onClick={closeExtraModal}
+                    className="px-6 py-3 
+              border border-gray-300 
+              text-gray-700 
+              rounded-xl 
+              hover:bg-gray-100 
+              transition-all font-medium"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    onClick={saveExtraItems}
+                    className="px-6 py-3 
+              bg-linear-to-r from-yellow-400 to-yellow-500 
+              text-white 
+              rounded-xl 
+              hover:shadow-lg hover:scale-[1.02] 
+              transition-all 
+              font-semibold 
+              flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    Add item
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Footer */}

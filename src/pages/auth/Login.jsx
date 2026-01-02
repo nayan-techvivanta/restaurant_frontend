@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { FiMail, FiLock, FiArrowRight, FiEye, FiEyeOff } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
@@ -32,80 +31,88 @@ export default function Login() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setIsLoading(true);
+    e.preventDefault();
+    setIsLoading(true);
 
-  try {
-    if (!formData.email || !formData.password) {
-      toast.error("Please fill in all fields");
-      return;
+    try {
+      if (!formData.email || !formData.password) {
+        toast.error("Please fill in all fields");
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        toast.error("Please enter a valid email address");
+        return;
+      }
+
+      const response = await axiosInstance.post("/api/v1/auth/login-email", {
+        email: formData.email,
+        password: formData.password,
+        type: "staff",
+      });
+
+      const data = response.data;
+      console.log("Login Response:", data);
+
+      const userId = data?.data?.user_id || data?.data?.id;
+      const userData = data?.data;
+      const isEmailVerified = userData?.is_email_verified;
+      const accessToken = userData?.access_token;
+      console.log(
+        "User ID:",
+        userId,
+        "Email Verified:",
+        isEmailVerified,
+        "Access Token:",
+        accessToken
+      );
+
+      // ✅ ONLY check if userId exists
+      if (!userId || !accessToken) {
+        toast.error("Login failed. Missing required user data.");
+        return;
+      }
+
+      localStorage.setItem("access_token", accessToken);
+      // ✅ Store user data for verification page
+      localStorage.setItem("temp_user_id", userId);
+      localStorage.setItem(
+        "temp_user_email",
+        userData?.email || formData.email
+      );
+      localStorage.setItem("temp_user_data", JSON.stringify(userData));
+
+      if (isEmailVerified) {
+        // ✅ EMAIL VERIFIED = Direct Dashboard
+        localStorage.setItem("isAuthenticated", "true");
+        localStorage.setItem("userEmail", userData?.email);
+        localStorage.setItem("userData", JSON.stringify(userData));
+
+        toast.success("Login successful! Welcome back.");
+        setTimeout(() => {
+          navigate("/dashboard", { replace: true });
+        }, 1000);
+      } else {
+        // ✅ EMAIL NOT VERIFIED = Verify OTP Page
+        toast.success("Please verify your email to continue.");
+        setTimeout(() => {
+          navigate(`/verifyemail/${userId}`);
+        }, 1000);
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      if (err.response?.data?.message) {
+        toast.error(err.response.data.message);
+      } else if (err.response?.status === 401) {
+        toast.error("Invalid email or password");
+      } else {
+        toast.error("Login failed. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      toast.error("Please enter a valid email address");
-      return;
-    }
-
-    const response = await axiosInstance.post("/api/v1/auth/login-email", {
-      email: formData.email,
-      password: formData.password,
-      type: "staff",
-    });
-
-    const data = response.data;
-    console.log("Login Response:", data);
-
-    // ✅ ONLY extract user_id and is_email_verified
-    const userId = data?.data?.user_id || data?.data?.id;
-    const userData = data?.data;
-    const isEmailVerified = userData?.is_email_verified;
-
-    console.log("User ID:", userId, "Email Verified:", isEmailVerified);
-
-    // ✅ ONLY check if userId exists
-    if (!userId) {
-      toast.error("Login failed. User data not found.");
-      return;
-    }
-
-    // ✅ Store user data for verification page
-    localStorage.setItem("temp_user_id", userId);
-    localStorage.setItem("temp_user_email", userData?.email || formData.email);
-    localStorage.setItem("temp_user_data", JSON.stringify(userData));
-
-    if (isEmailVerified) {
-      // ✅ EMAIL VERIFIED = Direct Dashboard
-      localStorage.setItem("isAuthenticated", "true");
-      localStorage.setItem("userEmail", userData?.email);
-      localStorage.setItem("userData", JSON.stringify(userData));
-      
-      toast.success("Login successful! Welcome back.");
-      setTimeout(() => {
-        navigate("/dashboard", { replace: true });
-      }, 1000);
-    } else {
-      // ✅ EMAIL NOT VERIFIED = Verify OTP Page
-      toast.success("Please verify your email to continue.");
-      setTimeout(() => {
-        navigate(`/verifyemail/${userId}`);
-      }, 1000);
-    }
-
-  } catch (err) {
-    console.error("Login error:", err);
-    if (err.response?.data?.message) {
-      toast.error(err.response.data.message);
-    } else if (err.response?.status === 401) {
-      toast.error("Invalid email or password");
-    } else {
-      toast.error("Login failed. Please try again.");
-    }
-  } finally {
-    setIsLoading(false);
-  }
-};
-
+  };
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -260,7 +267,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 sm:py-3.5 text-base sm:text-lg font-semibold rounded-xl bg-gradient-to-r from-yellow-500 to-yellow-600 text-black shadow-lg hover:shadow-yellow-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-2"
+              className="w-full py-3 sm:py-3.5 text-base sm:text-lg font-semibold rounded-xl bg-linear-to-r from-yellow-500 to-yellow-600 text-black shadow-lg hover:shadow-yellow-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-2"
             >
               {isLoading ? (
                 <>
@@ -295,7 +302,7 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="text-center text-gray-300 mt-6 sm:mt-8 text-sm sm:text-base">
+          {/* <p className="text-center text-gray-300 mt-6 sm:mt-8 text-sm sm:text-base">
             Don't have an account?{" "}
             <button
               type="button"
@@ -303,7 +310,7 @@ export default function Login() {
             >
               Create Account
             </button>
-          </p>
+          </p> */}
         </div>
       </div>
     </div>

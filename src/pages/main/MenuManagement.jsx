@@ -44,6 +44,15 @@ const YellowSwitch = styled(Switch)(({ theme }) => ({
 
 export default function MenuManagement() {
   const [categories, setCategories] = useState([]);
+  const [categoryPage, setCategoryPage] = useState(1);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [categoryPagination, setCategoryPagination] = useState({
+    total: 0,
+    totalPages: 1,
+    limit: 10,
+  });
+  const [categoryLoading, setCategoryLoading] = useState(false);
+
   const [menuItems, setMenuItems] = useState([]);
   const [combos, setCombos] = useState([]);
   const [comboLoading, setComboLoading] = useState(false);
@@ -103,30 +112,58 @@ export default function MenuManagement() {
     if (isFetched.current) return;
     isFetched.current = true;
 
-    fetchCategories();
+    fetchCategories(1, "");
   }, []);
+
+  useEffect(() => {
+    fetchCategories(categoryPage, categorySearch);
+  }, [categoryPage, categorySearch]);
   const getCategoryNameById = (id) => {
     const cat = categories.find((c) => Number(c.id) === Number(id));
     return cat ? cat.name : "";
   };
 
-  const fetchCategories = async () => {
+  // const fetchCategories = async () => {
+  //   try {
+  //     const response = await axiosInstance.get("/api/v1/category/all");
+
+  //     if (response.data?.data) {
+  //       setCategories(response.data.data);
+  //     }
+  //   } catch (error) {
+  //     console.error("Fetch categories error:", error);
+  //     alert("Failed to load categories");
+  //   }
+  // };
+  const fetchCategories = async (page = 1, search = "") => {
     try {
-      const response = await axiosInstance.get("/api/v1/category/all");
+      setCategoryLoading(true);
+      const params = new URLSearchParams({
+        limit: 10,
+        page: page.toString(),
+        status: "ACTIVE",
+        ...(search && { search }),
+      });
+
+      const response = await axiosInstance.get(
+        `/api/v1/category/all?${params}`
+      );
 
       if (response.data?.data) {
         setCategories(response.data.data);
       }
+
+      if (response.data?.pagination) {
+        setCategoryPagination(response.data.pagination);
+      }
     } catch (error) {
       console.error("Fetch categories error:", error);
-      alert("Failed to load categories");
+      toast.error("Failed to load categories");
+    } finally {
+      setCategoryLoading(false);
     }
   };
-  useEffect(() => {
-    if (["menu-items", "combos"].includes(activeTab)) {
-      fetchMenuItems(menuPage, menuSearch);
-    }
-  }, [activeTab, menuPage, menuSearch]);
+
   useEffect(() => {
     if (activeTab === "combos") {
       fetchCombos(comboPage, comboSearch);
@@ -139,46 +176,121 @@ export default function MenuManagement() {
 
   const menuFetched = useRef(false);
 
-  const fetchMenuItems = async (page = 1, search = "") => {
-    if (menuFetched.current) return;
-    menuFetched.current = true;
+  // const fetchMenuItems = async (page = 1, search = "") => {
+  //   if (menuFetched.current) return;
+  //   menuFetched.current = true;
 
+  //   try {
+  //     setMenuLoading(true);
+
+  //     const response = await axiosInstance.get(
+  //       `api/v1/product/all?page=${page}&search=${search}`
+  //     );
+
+  //     if (response.data?.data) {
+  //       const apiItems = response.data.data;
+
+  //       const formattedItems = apiItems.map((item) => ({
+  //         id: item.id,
+  //         name: item.name,
+  //         description: item.description,
+  //         price: Number(item.price),
+  //         sku: item.sku,
+  //         categoryId: item.category_id,
+  //         isVegetarian: item.type === "VEG",
+  //         isAvailable: item.status === "ACTIVE",
+  //         image: item.image || "",
+  //         rating: 4.5,
+  //       }));
+
+  //       setMenuItems(formattedItems);
+
+  //       if (response.data?.pagination) {
+  //         setMenuPagination(response.data.pagination);
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error("Fetch menu items error:", error);
+  //     toast.error("Failed to load menu items");
+  //   } finally {
+  //     setMenuLoading(false);
+  //   }
+  // };
+  const fetchMenuItems = async (
+    page = 1,
+    search = "",
+    category = selectedCategory
+  ) => {
     try {
       setMenuLoading(true);
 
-      const response = await axiosInstance.get(
-        `api/v1/product/all?page=${page}&search=${search}`
-      );
+      // Clear the refetch flag when search or category changes
+      menuFetched.current = false;
+
+      const params = new URLSearchParams({
+        limit: "10",
+        page: page.toString(),
+        status: "ACTIVE", // Add status parameter
+        ...(search && search.trim() && { search: search.trim() }),
+        ...(category && category !== "all" && { categoryid: category }),
+      });
+
+      console.log("Fetching menu items with params:", params.toString()); // Debug log
+
+      const response = await axiosInstance.get(`/api/v1/product/all?${params}`);
 
       if (response.data?.data) {
         const apiItems = response.data.data;
-
         const formattedItems = apiItems.map((item) => ({
           id: item.id,
           name: item.name,
           description: item.description,
           price: Number(item.price),
           sku: item.sku,
-          categoryId: item.category_id,
+          categoryId: item.categoryid,
           isVegetarian: item.type === "VEG",
           isAvailable: item.status === "ACTIVE",
-          image: item.image || "",
+          image: item.image,
           rating: 4.5,
         }));
-
         setMenuItems(formattedItems);
-
-        if (response.data?.pagination) {
-          setMenuPagination(response.data.pagination);
-        }
       }
+
+      if (response.data?.pagination) {
+        setMenuPagination(response.data.pagination);
+      }
+
+      // Reset the fetch flag after successful fetch
+      menuFetched.current = true;
     } catch (error) {
       console.error("Fetch menu items error:", error);
       toast.error("Failed to load menu items");
+      menuFetched.current = false; // Reset on error
     } finally {
       setMenuLoading(false);
     }
   };
+
+  const handleMenuSearchChange = (value) => {
+    setMenuSearch(value);
+    setMenuPage(1);
+    menuFetched.current = false;
+  };
+
+  const handleCategoryFilterChange = (value) => {
+    setSelectedCategory(value);
+    setMenuPage(1);
+    menuFetched.current = false;
+  };
+
+  useEffect(() => {
+    if (["menu-items", "combos"].includes(activeTab)) {
+      if (activeTab === "menu-items") {
+        menuFetched.current = false;
+      }
+      fetchMenuItems(menuPage, menuSearch, selectedCategory);
+    }
+  }, [activeTab, menuPage, menuSearch, selectedCategory]);
   const fetchCombos = async (page = 1, search = "") => {
     try {
       setComboLoadingList(true);
@@ -261,6 +373,29 @@ export default function MenuManagement() {
     setCategoryName(category.name);
     setEditCategoryId(category.id);
   };
+  // const handleToggleCategoryStatus = async (id, isActive) => {
+  //   const status = isActive ? "ACTIVE" : "INACTIVE";
+
+  //   try {
+  //     setStatusLoading((prev) => ({ ...prev, [id]: true }));
+
+  //     await axiosInstance.put(`/api/v1/category/status/${id}`, {
+  //       status,
+  //     });
+
+  //     setCategories((prev) =>
+  //       prev.map((cat) => (cat.id === id ? { ...cat, status } : cat))
+  //     );
+
+  //     toast.success(`Category ${status.toLowerCase()} successfully`);
+  //   } catch (error) {
+  //     console.error("Status API error:", error);
+  //     toast.error("Failed to update category status");
+  //   } finally {
+  //     // stop loader
+  //     setStatusLoading((prev) => ({ ...prev, [id]: false }));
+  //   }
+  // };
   const handleToggleCategoryStatus = async (id, isActive) => {
     const status = isActive ? "ACTIVE" : "INACTIVE";
 
@@ -271,16 +406,12 @@ export default function MenuManagement() {
         status,
       });
 
-      setCategories((prev) =>
-        prev.map((cat) => (cat.id === id ? { ...cat, status } : cat))
-      );
-
-      toast.success(`Category ${status.toLowerCase()} successfully`);
+      fetchCategories(categoryPage, categorySearch);
+      toast.success(`Category ${status.toLowerCase()}d successfully`);
     } catch (error) {
       console.error("Status API error:", error);
       toast.error("Failed to update category status");
     } finally {
-      // stop loader
       setStatusLoading((prev) => ({ ...prev, [id]: false }));
     }
   };
@@ -717,6 +848,24 @@ export default function MenuManagement() {
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">
                   Food Categories ({categories.length})
                 </h2>
+                <div className="mb-6">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={categorySearch}
+                      onChange={(e) => {
+                        setCategorySearch(e.target.value);
+                        setCategoryPage(1);
+                      }}
+                      placeholder="Search categories..."
+                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition"
+                    />
+                    <FiTag
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
+                      size={20}
+                    />
+                  </div>
+                </div>
 
                 {categories.length === 0 ? (
                   <div className="text-center py-12">
@@ -836,16 +985,6 @@ export default function MenuManagement() {
                   <MdFastfood size={30} className="text-yellow-400" />
                   Add New Menu Item
                 </h2>
-                {/* <input
-                  type="text"
-                  placeholder="Search items..."
-                  value={menuSearch}
-                  onChange={(e) => {
-                    setMenuSearch(e.target.value);
-                    setMenuPage(1);
-                  }}
-                  className="border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition"
-                /> */}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Left Column */}
@@ -1049,23 +1188,46 @@ export default function MenuManagement() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
                   <h2 className="text-2xl font-bold text-gray-800">
                     Menu Items ({menuItems.length})
+                    {menuLoading && (
+                      <span className="text-sm text-gray-500 ml-2">
+                        (Loading...)
+                      </span>
+                    )}
                   </h2>
-                  <div className="flex gap-4 mt-4 md:mt-0">
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition"
-                    >
-                      <option value="all">All Categories</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
 
+                  {/* <select
+                    value={selectedCategory}
+                    onChange={(e) => {
+                      setSelectedCategory(e.target.value);
+                      setMenuPage(1);
+                    }}
+                    className="border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition md:w-auto w-full md:max-w-xs"
+                  >
+                    <option value="all">All Categories</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select> */}
+                </div>
+                <div className="relative w-full md:w-auto my-3.5">
+                  <input
+                    type="text"
+                    placeholder="Search menu items..."
+                    value={menuSearch}
+                    onChange={(e) => {
+                      setMenuSearch(e.target.value);
+                      setMenuPage(1);
+                      menuFetched.current = false;
+                    }}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none transition"
+                  />
+                  <FiTag
+                    className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    size={20}
+                  />
+                </div>
                 {menuItems.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="text-gray-400 mb-4">

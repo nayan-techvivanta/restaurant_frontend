@@ -6,7 +6,6 @@ import {
   Navigate,
 } from "react-router-dom";
 import Login from "../pages/auth/Login";
-import Register from "../pages/auth/Register";
 import Dashboard from "../pages/main/Dashboard";
 import Layout from "../layout/Layout";
 import CreateOrder from "../pages/main/CreateOrder";
@@ -22,7 +21,6 @@ export default function AppRouter() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
         <Route path="/verifyemail/:userId" element={<VerifyOtp />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />

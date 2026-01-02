@@ -90,17 +90,38 @@ const PrintReceipt = () => {
         <div className="border-b border-dashed border-black my-2"></div>
 
         {orderData.items?.map((item, i) => (
-          <div key={i} className="mb-2">
+          <div key={i} className="mb-3">
+            {/* MAIN ITEM */}
             <div className="font-bold text-center">{item.name}</div>
+
             <div className="flex justify-between text-xs">
               <span>
                 {item.quantity} x {item.price}
               </span>
               <span>{item.quantity * item.price}</span>
             </div>
+
             {item.notes && (
               <div className="text-xs italic text-gray-600 text-center">
                 ({item.notes})
+              </div>
+            )}
+
+            {/* ===== EXTRAS ===== */}
+            {item.extra && item.extra.length > 0 && (
+              <div className="mt-1 ml-2 text-xs">
+                {item.extra.map((extra, idx) => (
+                  <div key={idx} className="mb-1">
+                    <div className="font-bold text-center">+ {extra.name}</div>
+
+                    <div className="flex justify-between pl-4">
+                      <span>
+                        {extra.quantity} x {extra.price}
+                      </span>
+                      <span>{extra.quantity * extra.price}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

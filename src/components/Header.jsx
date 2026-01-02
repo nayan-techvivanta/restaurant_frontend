@@ -1,135 +1,85 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   AppBar,
   Toolbar,
   IconButton,
   Typography,
   Box,
-  Badge,
   Avatar,
   Menu,
   MenuItem,
   Divider,
   ListItemIcon,
-  InputBase,
-  alpha,
-  styled,
+  Tooltip,
+  CircularProgress,
   Chip,
-  Button,
-  Tooltip
 } from "@mui/material";
 import {
   Menu as MenuIcon,
-  Search,
-  Notifications,
-  Settings,
   Person,
   Logout,
   ExpandMore,
   Help,
   Dashboard,
-  Brightness4,
-  Brightness7,
+  Settings,
 } from "@mui/icons-material";
+import axios from "axios";
 
-const SearchBar = styled('div')(({ theme }) => ({
-  position: "relative",
-  borderRadius: 8,
-  backgroundColor: "#fafafa",
-  border: `1px solid ${alpha("#000", 0.08)}`,
-  paddingLeft: theme.spacing(5),
-  height: 44,
-  display: "flex",
-  alignItems: "center",
-  transition: "all 0.3s ease",
-
-  "&:hover": {
-    backgroundColor: "#fff",
-    borderColor: alpha("#F5C857", 0.4),
-    boxShadow: "0px 4px 12px rgba(0,0,0,0.06)",
-  },
-
-  "&.focused": {
-    backgroundColor: "#fff7de",                  
-    borderColor: "#F5C857",
-    boxShadow: `0 0 0 3px ${alpha("#F5C857", 0.35)}`,
-  },
-
-  [theme.breakpoints.down("sm")]: {
-    width: "100%",
-  },
-}));
-
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  position: "absolute",
-  left: 12,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#F5C857",
-  pointerEvents: "none",
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  fontSize: "0.9rem",
-  color: "#333",
-  width: "100%",
-
-  "& .MuiInputBase-input": {
-    padding: "10px 12px",
-    paddingLeft: theme.spacing(0),
-    transition: "width 0.3s ease",
-
-    [theme.breakpoints.up("md")]: {
-      width: "32ch",
-      "&:focus": {
-        width: "42ch",
-      },
-    },
-  },
-}));
-
-
-const Header = ({ drawerWidth, handleDrawerToggle, onThemeToggle, darkMode }) => {
+const Header = ({ drawerWidth, handleDrawerToggle }) => {
   const [anchorEl, setAnchorEl] = useState(null);
-  const [notificationsAnchorEl, setNotificationsAnchorEl] = useState(null);
-  const [focus, setFocus] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const userMenuOpen = Boolean(anchorEl);
-  const notificationsOpen = Boolean(notificationsAnchorEl);
+
+  // Fetch user profile data
+  const fetchUserProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get("/api/v1/user/", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      console.log("API Response:", response.data); // Debug log
+      setUserData(response.data.data);
+    } catch (err) {
+      console.error("Profile fetch error:", err);
+      // Fallback data for testing
+      setUserData({
+        user: {
+          first_name: "adarsh",
+          last_name: "mehta",
+          email: "adarshmehta@gmail.com",
+        },
+        restaurant: {
+          name: "Golden Spoon",
+          city: "Ahmedabad",
+          state: "Gujarat",
+        },
+        role: "OWNER",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
 
   const handleProfileMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
   };
 
-  const handleNotificationsMenuOpen = (event) => {
-    setNotificationsAnchorEl(event.currentTarget);
-  };
-
   const handleMenuClose = () => {
     setAnchorEl(null);
-    setNotificationsAnchorEl(null);
   };
 
-  const notifications = [
-    { id: 1, text: "New booking received for 6 people", time: "10 min ago", read: false, type: "booking" },
-    { id: 2, text: "Payment confirmed - Order #12345", time: "1 hour ago", read: false, type: "payment" },
-    { id: 3, text: "New review for 'Spice Garden'", time: "2 hours ago", read: true, type: "review" },
-    { id: 4, text: "System maintenance completed", time: "1 day ago", read: true, type: "system" },
-    { id: 5, text: "Weekly sales report is ready", time: "2 days ago", read: true, type: "report" },
-  ];
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const getNotificationIcon = (type) => {
-    const icons = {
-      booking: "📋",
-      payment: "💰",
-      review: "⭐",
-      system: "🔄",
-      report: "📊"
-    };
-    return icons[type] || "🔔";
+  const getInitials = (firstName, lastName) => {
+    return `${firstName?.charAt(0)?.toUpperCase() || ""}${
+      lastName?.charAt(0)?.toUpperCase() || ""
+    }`;
   };
 
   return (
@@ -138,265 +88,190 @@ const Header = ({ drawerWidth, handleDrawerToggle, onThemeToggle, darkMode }) =>
       sx={{
         width: { sm: `calc(100% - ${drawerWidth}px)` },
         ml: { sm: `${drawerWidth}px` },
-        backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-        backdropFilter: 'blur(20px)', 
-        WebkitBackdropFilter: 'blur(20px)', 
-        borderBottom: '2px solid rgba(0, 0, 0, 0.08)', 
-        boxShadow: 'none', 
-        height: '84px', 
-        display: 'flex',
-        justifyContent: 'center',
+        backgroundColor: "rgba(255, 255, 255, 0.95)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderBottom: "2px solid rgba(0, 0, 0, 0.08)",
+        boxShadow: "none",
+        height: "84px",
         zIndex: (theme) => theme.zIndex.drawer + 1,
       }}
     >
-      <Toolbar 
-        sx={{ 
-          minHeight: '84px !important', 
-          height: '84px',
+      <Toolbar
+        sx={{
+          minHeight: "84px !important",
+          height: "84px",
           px: { xs: 2, md: 3 },
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 2
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 2,
         }}
       >
-        {/* Left Side: Menu Button and Search */}
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          flex: 1,
-          gap: 2,
-          height: '100%'
-        }}>
+        {/* Left Side: Menu Button and Restaurant Name */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            flex: 1,
+            minWidth: 0, // Prevents overflow
+            gap: 2,
+          }}
+        >
           {/* Menu Button (Mobile) */}
           <IconButton
             color="inherit"
             aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ 
-              mr: { xs: 1, sm: 0 },
-              display: { sm: 'none' },
-              color: 'primary.main',
-              backgroundColor: alpha('#F5C857', 0.08),
-              height: '40px',
-              width: '40px',
-              '&:hover': {
-                backgroundColor: alpha('#F5C857', 0.15),
-              }
+            sx={{
+              display: { sm: "none" },
+              color: "primary.main",
+              backgroundColor: "rgba(245, 200, 87, 0.08)",
+              height: "40px",
+              width: "40px",
+              "&:hover": {
+                backgroundColor: "rgba(245, 200, 87, 0.15)",
+              },
             }}
           >
             <MenuIcon />
           </IconButton>
 
-          {/* Search Bar */}
-          <SearchBar className={focus ? "focused" : ""}>
-  <SearchIconWrapper>
-    <Search />
-  </SearchIconWrapper>
-
-  <StyledInputBase
-    placeholder="Search restaurants, menus, orders..."
-    onFocus={() => setFocus(true)}
-    onBlur={() => setFocus(false)}
-  />
-</SearchBar>
-
-        </Box>
-
-        {/* Right Side Actions */}
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 0.5,
-          flexShrink: 0,
-          height: '100%'
-        }}>
-
-
-          {/* Notifications */}
-          <Tooltip title="Notifications">
-            <IconButton
-              color="inherit"
-              onClick={handleNotificationsMenuOpen}
-              sx={{
-                position: 'relative',
-                color: 'text.secondary',
-                borderRadius: 2,
-                height: '40px',
-                width: '40px',
-                '&:hover': {
-                  backgroundColor: alpha('#F5C857', 0.08),
-                  color: 'primary.main',
-                }
-              }}
-            >
-              <Badge 
-                badgeContent={unreadCount} 
-                color="error"
-                sx={{
-                  '& .MuiBadge-badge': {
-                    fontSize: '0.7rem',
-                    height: 18,
-                    minWidth: 18,
-                    top: 5,
-                    right: 5,
-                  }
-                }}
-              >
-                <Notifications />
-              </Badge>
-            </IconButton>
-          </Tooltip>
-
-          {/* Notifications Menu */}
-          <Menu
-            anchorEl={notificationsAnchorEl}
-            open={notificationsOpen}
-            onClose={handleMenuClose}
-            PaperProps={{
-              sx: {
-                width: 380,
-                maxHeight: 450,
-                mt: 1.5,
-                borderRadius: 2,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-              }
+          {/* Restaurant Name - Always visible */}
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              flexGrow: 1,
+              ml: { xs: 0, sm: 1 },
             }}
           >
-            <Box sx={{ p: 2, pb: 1.5 }}>
-              <Typography variant="subtitle1" fontWeight={600}>
-                Notifications
-                {unreadCount > 0 && (
-                  <Chip 
-                    label={`${unreadCount} new`} 
-                    size="small" 
-                    color="error"
-                    sx={{ 
-                      ml: 1, 
-                      height: 20,
-                      fontSize: '0.7rem',
-                      fontWeight: 500
-                    }}
-                  />
-                )}
-              </Typography>
-            </Box>
-            <Divider />
-            <Box sx={{ maxHeight: 320, overflow: 'auto' }}>
-              {notifications.map((notification) => (
-                <MenuItem 
-                  key={notification.id} 
-                  onClick={handleMenuClose}
-                  sx={{ 
-                    py: 1.5,
-                    px: 2,
-                    borderLeft: notification.read ? 'none' : `3px solid #F5C857`,
-                    backgroundColor: notification.read ? 'transparent' : alpha('#F5C857', 0.03),
-                    '&:hover': {
-                      backgroundColor: alpha('#F5C857', 0.05),
-                    }
+            {loading ? (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <CircularProgress size={20} />
+                <Typography
+                  variant="h6"
+                  sx={{ fontWeight: 700, fontSize: "1.1rem" }}
+                >
+                  Loading...
+                </Typography>
+              </Box>
+            ) : (
+              <>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    color: "text.primary",
+                    fontSize: { xs: "1rem", md: "1.2rem" },
+                    lineHeight: 1.2,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
-                    <Box sx={{ 
-                      mr: 2, 
-                      fontSize: '1.2rem',
-                      opacity: 0.8,
-                      mt: 0.2
-                    }}>
-                      {getNotificationIcon(notification.type)}
-                    </Box>
-                    <Box sx={{ flexGrow: 1 }}>
-                      <Typography variant="body2" sx={{ 
-                        fontWeight: notification.read ? 400 : 600,
-                        color: notification.read ? 'text.primary' : 'text.primary'
-                      }}>
-                        {notification.text}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                        {notification.time}
-                      </Typography>
-                    </Box>
-                    {!notification.read && (
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: '#F5C857',
-                          ml: 1,
-                          mt: 0.5
-                        }}
-                      />
-                    )}
-                  </Box>
-                </MenuItem>
-              ))}
-            </Box>
-            <Divider />
-            <Box sx={{ p: 1.5 }}>
-              <Button 
-                fullWidth 
-                size="small" 
-                onClick={handleMenuClose}
-                sx={{ 
-                  color: '#F5C857',
-                  fontWeight: 600,
-                  '&:hover': {
-                    backgroundColor: alpha('#F5C857', 0.08),
-                  }
-                }}
-              >
-                View all notifications
-              </Button>
-            </Box>
-          </Menu>
+                  {userData?.restaurant?.name || "Golden Spoon"}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontSize: { xs: "0.7rem", md: "0.8rem" },
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {userData?.restaurant
+                    ? `${userData.restaurant.city || ""}, ${
+                        userData.restaurant.state || ""
+                      }`.trim() || "Ahmedabad, Gujarat"
+                    : "Ahmedabad, Gujarat"}
+                </Typography>
+              </>
+            )}
+          </Box>
+        </Box>
 
-          {/* User Profile */}
+        {/* Right Side: User Profile */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.5,
+            flexShrink: 0,
+          }}
+        >
           <Tooltip title="Account settings">
-            <Box 
-              sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1, 
-                cursor: 'pointer',
-                ml: 0.5,
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                cursor: "pointer",
                 p: 0.8,
                 borderRadius: 2,
-                height: '48px',
-                '&:hover': {
-                  backgroundColor: alpha('#F5C857', 0.08),
-                }
+                height: "48px",
+                "&:hover": {
+                  backgroundColor: "rgba(245, 200, 87, 0.08)",
+                },
               }}
               onClick={handleProfileMenuOpen}
             >
               <Avatar
                 sx={{
-                  bgcolor: '#F5C857',
-                  color: '#000',
+                  bgcolor: "#F5C857",
+                  color: "#000",
                   width: 36,
                   height: 36,
                   fontWeight: 700,
-                  fontSize: '0.95rem',
-                  boxShadow: '0 4px 12px rgba(245, 200, 87, 0.4)'
+                  fontSize: "0.95rem",
+                  boxShadow: "0 4px 12px rgba(245, 200, 87, 0.4)",
                 }}
               >
-                ND
+                {userData?.user
+                  ? getInitials(
+                      userData.user.first_name,
+                      userData.user.last_name
+                    )
+                  : "AM"}
               </Avatar>
-              <Box sx={{ display: { xs: 'none', lg: 'block' } }}>
-                <Typography variant="subtitle2" sx={{color:'gray', fontWeight: 700, lineHeight: 1.2}}>
-                  Nayan Dangar
+              <Box
+                sx={{
+                  display: { xs: "none", md: "flex", flexDirection: "column" },
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    color: "text.primary",
+                    fontWeight: 700,
+                    lineHeight: 1.1,
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  {userData?.user
+                    ? `${userData.user.first_name} ${userData.user.last_name}`
+                    : "Adarsh Mehta"}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontSize: "0.7rem",
+                  }}
+                >
+                  {userData?.role || "OWNER"}
                 </Typography>
               </Box>
-              <ExpandMore 
-                fontSize="small" 
-                sx={{ 
-                  ml: 0.5, 
-                  color: 'text.secondary',
-                  transition: 'transform 0.2s',
-                  transform: userMenuOpen ? 'rotate(180deg)' : 'rotate(0)'
-                }} 
+              <ExpandMore
+                fontSize="small"
+                sx={{
+                  color: "text.secondary",
+                  transition: "transform 0.2s",
+                  transform: userMenuOpen ? "rotate(180deg)" : "rotate(0)",
+                }}
               />
             </Box>
           </Tooltip>
@@ -408,92 +283,65 @@ const Header = ({ drawerWidth, handleDrawerToggle, onThemeToggle, darkMode }) =>
             onClose={handleMenuClose}
             PaperProps={{
               sx: {
-                width: 260,
+                width: 280,
                 mt: 1.5,
                 borderRadius: 2,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-              }
+                boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+              },
             }}
-            transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-            anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            transformOrigin={{ horizontal: "right", vertical: "top" }}
+            anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
           >
-            <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="subtitle1" fontWeight={700}>
-                Nayan Dangar
+            <Box
+              sx={{ p: 2.5, borderBottom: "1px solid", borderColor: "divider" }}
+            >
+              <Typography variant="h6" fontWeight={700} gutterBottom>
+                {userData?.user
+                  ? `${userData.user.first_name} ${userData.user.last_name}`
+                  : "Adarsh Mehta"}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                nayandangar1@gmail.com
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {userData?.user?.email || "adarshmehta@gmail.com"}
               </Typography>
+              <Chip
+                label={userData?.role || "OWNER"}
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ fontSize: "0.7rem", height: 24 }}
+              />
             </Box>
-            <MenuItem 
-              onClick={handleMenuClose}
-              sx={{
-                py: 1.5,
-                '&:hover': {
-                  backgroundColor: alpha('#F5C857', 0.05),
-                }
-              }}
-            >
-              <ListItemIcon sx={{ color: '#F5C857' }}>
-                <Person fontSize="small" />
-              </ListItemIcon>
-              <Typography variant="body2" >My Profile</Typography>
-            </MenuItem>
-            <MenuItem 
-              onClick={handleMenuClose}
-              sx={{
-                py: 1.5,
-                '&:hover': {
-                  backgroundColor: alpha('#F5C857', 0.05),
-                }
-              }}
-            >
-              <ListItemIcon sx={{ color: '#F5C857' }}>
+            <MenuItem onClick={handleMenuClose} sx={{ py: 1.5 }}>
+              <ListItemIcon sx={{ color: "#F5C857" }}>
                 <Dashboard fontSize="small" />
               </ListItemIcon>
               <Typography variant="body2">Dashboard</Typography>
             </MenuItem>
-            <MenuItem 
-              onClick={handleMenuClose}
-              sx={{
-                py: 1.5,
-                '&:hover': {
-                  backgroundColor: alpha('#F5C857', 0.05),
-                }
-              }}
-            >
-              <ListItemIcon sx={{ color: '#F5C857' }}>
+            <MenuItem onClick={handleMenuClose} sx={{ py: 1.5 }}>
+              <ListItemIcon sx={{ color: "#F5C857" }}>
                 <Settings fontSize="small" />
               </ListItemIcon>
               <Typography variant="body2">Account Settings</Typography>
             </MenuItem>
             <Divider />
-            <MenuItem 
-              onClick={handleMenuClose}
-              sx={{
-                py: 1.5,
-                '&:hover': {
-                  backgroundColor: alpha('#F5C857', 0.05),
-                }
-              }}
-            >
-              <ListItemIcon sx={{ color: '#F5C857' }}>
+            <MenuItem onClick={handleMenuClose} sx={{ py: 1.5 }}>
+              <ListItemIcon sx={{ color: "#F5C857" }}>
                 <Help fontSize="small" />
               </ListItemIcon>
               <Typography variant="body2">Help & Support</Typography>
             </MenuItem>
             <Divider />
-            <MenuItem 
-              onClick={handleMenuClose} 
-              sx={{ 
+            <MenuItem
+              onClick={handleMenuClose}
+              sx={{
                 py: 1.5,
-                color: '#d32f2f',
-                '&:hover': {
-                  backgroundColor: alpha('#d32f2f', 0.04),
-                }
+                color: "#d32f2f",
+                "&:hover": {
+                  backgroundColor: "rgba(211, 47, 47, 0.04)",
+                },
               }}
             >
-              <ListItemIcon sx={{ color: '#d32f2f' }}>
+              <ListItemIcon sx={{ color: "#d32f2f" }}>
                 <Logout fontSize="small" />
               </ListItemIcon>
               <Typography variant="body2" fontWeight={500}>
@@ -501,9 +349,7 @@ const Header = ({ drawerWidth, handleDrawerToggle, onThemeToggle, darkMode }) =>
               </Typography>
             </MenuItem>
           </Menu>
-        
         </Box>
-        
       </Toolbar>
     </AppBar>
   );

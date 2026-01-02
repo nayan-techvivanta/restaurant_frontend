@@ -109,6 +109,29 @@ const OrderList = () => {
   };
 
   // Fetch order details
+  // const fetchOrderDetails = async (orderId) => {
+  //   if (orderDetails[orderId]) {
+  //     setExpandedOrder(expandedOrder === orderId ? null : orderId);
+  //     return;
+  //   }
+
+  //   try {
+  //     setLoadingDetails(true);
+  //     const response = await axiosInstance.get(`/api/v1/order/${orderId}`);
+
+  //     if (response.data && response.data.data) {
+  //       setOrderDetails((prev) => ({
+  //         ...prev,
+  //         [orderId]: response.data.data,
+  //       }));
+  //       setExpandedOrder(orderId);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching order details:", error);
+  //   } finally {
+  //     setLoadingDetails(false);
+  //   }
+  // };
   const fetchOrderDetails = async (orderId) => {
     if (orderDetails[orderId]) {
       setExpandedOrder(expandedOrder === orderId ? null : orderId);
@@ -135,21 +158,18 @@ const OrderList = () => {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      // Show loading state for the specific order
       setOrders((prev) =>
         prev.map((order) =>
           order.id === orderId ? { ...order, updating: true } : order
         )
       );
 
-      // Make PUT request to update status
       const response = await axiosInstance.put("/api/v1/order/status", {
         id: orderId,
         status: newStatus,
       });
 
       if (response.data && response.data.message) {
-        // Update local state
         setOrders((prev) =>
           prev.map((order) =>
             order.id === orderId
@@ -157,13 +177,12 @@ const OrderList = () => {
                   ...order,
                   status: newStatus,
                   updating: false,
-                  updated_at: new Date().toISOString(), // Update timestamp
+                  updated_at: new Date().toISOString(),
                 }
               : order
           )
         );
 
-        // Also update the order details if they are currently expanded
         if (orderDetails[orderId]) {
           setOrderDetails((prev) => ({
             ...prev,
@@ -256,7 +275,7 @@ const OrderList = () => {
     });
   };
 
-  // Calculate stats
+  
   const stats = {
     total: orders.length,
     placed: orders.filter((o) => o.status === "PLACED").length,
@@ -265,8 +284,29 @@ const OrderList = () => {
     cancelled: orders.filter((o) => o.status === "CANCELLED").length,
     revenue: orders.reduce((sum, order) => sum + (order.grand_total || 0), 0),
   };
+  // Calculate total items including combo details
+const calculateTotalItems = (order) => {
+  let total = 0;
+  
+  // Add single items
+  if (order.single_items) {
+    total += order.single_items.length;
+  }
+  
+  // Add combo items + their details
+  if (order.combo_items) {
+    order.combo_items.forEach((combo) => {
+      total += 1; // Count the combo itself
+      if (combo.details && combo.details.length > 0) {
+        total += combo.details.length; 
+      }
+    });
+  }
+  
+  return total;
+};
 
-  // Pagination handlers
+
   const handleNextPage = () => {
     if (pagination.hasNextPage) {
       setPagination((prev) => ({ ...prev, page: prev.page + 1 }));
@@ -439,7 +479,7 @@ const OrderList = () => {
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value);
-                  setPagination((prev) => ({ ...prev, page: 1 })); // Reset to page 1 on filter change
+                  setPagination((prev) => ({ ...prev, page: 1 })); 
                 }}
                 className="appearance-none w-full px-4 py-3 pr-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
                 disabled={loading}
@@ -555,7 +595,7 @@ const OrderList = () => {
                           <div className="flex items-center gap-2">
                             <Package className="w-4 h-4 text-gray-400" />
                             <span className="text-gray-700">
-                              {order.items?.length || 0} items
+                               {calculateTotalItems(order)} items
                             </span>
                           </div>
                         </div>
@@ -587,7 +627,6 @@ const OrderList = () => {
                           )}
                         </motion.button>
 
-                       
                         {order.status === "PLACED" && (
                           <motion.button
                             whileHover={{ scale: 1.05 }}
@@ -633,40 +672,132 @@ const OrderList = () => {
                       >
                         <div className="p-4 md:p-6">
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            
                             {/* Order Items */}
                             <div>
                               <h4 className="text-lg font-semibold text-gray-900 mb-4">
                                 Order Items
                               </h4>
-                              <div className="space-y-3">
-                                {orderDetails[order.id].items?.map(
-                                  (item, idx) => (
-                                    <div
-                                      key={item.item_id || idx}
-                                      className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"
-                                    >
-                                      <div>
-                                        <p className="font-medium text-gray-900">
-                                          {item.product_name ||
-                                            item.product?.name}
-                                        </p>
-                                        <p className="text-sm text-gray-600">
-                                          Quantity: {item.quantity} × ₹
-                                          {item.unit_price || item.price}
-                                        </p>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                          Type: {item.product?.type || "VEG"} |
-                                          SKU: {item.product?.sku || "N/A"}
-                                        </p>
-                                      </div>
-                                      <p className="font-semibold text-gray-900">
-                                        ₹
-                                        {item.total_price ||
-                                          item.quantity *
-                                            (item.price || item.unit_price)}
-                                      </p>
+                              <div className="space-y-4">
+                                {/* Single Items */}
+                                {orderDetails[order.id].single_items?.length >
+                                  0 && (
+                                  <div className="mb-6">
+                                    <h5 className="font-medium text-gray-800 mb-3 text-sm uppercase tracking-wide">
+                                      Single Items
+                                    </h5>
+                                    <div className="space-y-3">
+                                      {orderDetails[order.id].single_items.map(
+                                        (item, idx) => (
+                                          <div
+                                            key={item.item_id || idx}
+                                            className="flex justify-between items-center p-4 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition-all"
+                                          >
+                                            <div>
+                                              <p className="font-semibold text-gray-900">
+                                                {item.product_name ||
+                                                  item.product?.name}
+                                              </p>
+                                              <p className="text-sm text-gray-600">
+                                                Quantity: {item.quantity} × ₹
+                                                {item.unit_price || item.price}
+                                              </p>
+                                            </div>
+                                            <p className="font-semibold text-gray-900">
+                                              ₹
+                                              {item.total_price ||
+                                                item.quantity *
+                                                  (item.price ||
+                                                    item.unit_price)}
+                                            </p>
+                                          </div>
+                                        )
+                                      )}
                                     </div>
-                                  )
+                                  </div>
+                                )}
+
+                                {/* Combo Items */}
+                                {orderDetails[order.id].combo_items?.length >
+                                  0 && (
+                                  <div>
+                                    <h5 className="font-medium text-gray-800 mb-3 text-sm uppercase tracking-wide">
+                                      Combo Items
+                                    </h5>
+                                    {orderDetails[order.id].combo_items.map(
+                                      (combo, comboIdx) => (
+                                        <div
+                                          key={combo.item_id || comboIdx}
+                                          className="mb-4"
+                                        >
+                                          {/* Combo Header */}
+                                          <div className="p-4 bg-linear-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl mb-3">
+                                            <div className="flex justify-between items-start">
+                                              <div>
+                                                <p className="font-semibold text-lg text-gray-900">
+                                                  {combo.combo_name}
+                                                </p>
+                                                <p className="text-sm text-gray-600 flex items-center gap-1">
+                                                  Quantity: {combo.quantity} × ₹
+                                                  {combo.price}
+                                                  {combo.original_price && (
+                                                    <>
+                                                      <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                                                        Save{" "}
+                                                        {
+                                                          combo.savings_percentage
+                                                        }
+                                                        %
+                                                      </span>
+                                                    </>
+                                                  )}
+                                                </p>
+                                              </div>
+                                              <p className="font-bold text-xl text-amber-600">
+                                                ₹{combo.total}
+                                              </p>
+                                            </div>
+                                          </div>
+
+                                          {/* Combo Details */}
+                                          {combo.details &&
+                                            combo.details.length > 0 && (
+                                              <div className="space-y-2">
+                                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide px-4">
+                                                  Includes:
+                                                </p>
+                                                {combo.details.map(
+                                                  (detail, detailIdx) => (
+                                                    <div
+                                                      key={
+                                                        detail.product_id ||
+                                                        detailIdx
+                                                      }
+                                                      className="flex justify-between items-center p-3 bg-gray-50 border rounded-lg ml-4"
+                                                    >
+                                                      <div>
+                                                        <p className="font-medium text-sm text-gray-900">
+                                                          {detail.product_name}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">
+                                                          Qty: {detail.quantity}
+                                                        </p>
+                                                      </div>
+                                                      <span className="text-xs text-gray-500 line-through">
+                                                        ₹
+                                                        {
+                                                          detail.original_unit_price
+                                                        }
+                                                      </span>
+                                                    </div>
+                                                  )
+                                                )}
+                                              </div>
+                                            )}
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
