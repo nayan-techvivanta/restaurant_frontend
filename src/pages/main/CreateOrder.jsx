@@ -16,12 +16,16 @@ import {
   Star,
   ChevronLeft,
   ChevronRight,
+  TableProperties,
+  RefreshCw,
+  User,
 } from "lucide-react";
 import { FaUtensils } from "react-icons/fa";
 import axiosInstance from "../../api/axiosInstance";
 import { MdOutlineFastfood } from "react-icons/md";
 import { IoRestaurantOutline } from "react-icons/io5";
-import { toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function CreateOrder() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,9 +49,445 @@ export default function CreateOrder() {
   const [extraItemsForMainItem, setExtraItemsForMainItem] = useState([]);
   const [limit] = useState(1000);
 
+  // TABLE MANAGEMENT STATES
+  const [userData, setUserData] = useState(null);
+  const [tables, setTables] = useState([]);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [showTableSelection, setShowTableSelection] = useState(true); // Show tables first for TABLE restaurants
+  const [currentTableOrder, setCurrentTableOrder] = useState(null); // Track current active order for the table
+  const [tableOrders, setTableOrders] = useState([]); // Store all orders for the current table
+
+  // POSTPAID MANAGEMENT STATES
+  const [activePostpaidOrders, setActivePostpaidOrders] = useState([]);
+  const [loadingPostpaidOrders, setLoadingPostpaidOrders] = useState(false);
+
   const primaryColor = "#F5C857";
   const primaryLight = "#FEF6E6";
   const primaryDark = "#D4A63A";
+
+  // Fetch user data on mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await axiosInstance.get("/api/v1/user/");
+        if (response.data?.data) {
+          setUserData(response.data.data);
+
+          // If restaurant type is TABLE, fetch tables and check for existing assignment
+          if (response.data.data.restaurant?.type === "TABLE") {
+            await checkExistingTableAssignment(response.data.data.user?.id);
+          } else if (response.data.data.restaurant?.type === "POSTPAID") {
+            // For POSTPAID, fetch active orders
+            await fetchActivePostpaidOrders();
+            setShowTableSelection(true); // Show order selection screen
+          } else {
+            // For QSR (Prepaid), skip table selection
+            setShowTableSelection(false);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  // Check if user already has a table assigned and restore it
+  const checkExistingTableAssignment = async (userId) => {
+    try {
+      setLoadingTables(true);
+      const response = await axiosInstance.get("/api/v1/table/all?page=1&limit=100");
+
+      if (response.data.success && response.data.data) {
+        setTables(response.data.data);
+
+        // Just load tables - user can manually click their assigned table to resume
+        // No automatic redirection
+      }
+    } catch (error) {
+      console.error("Error checking table assignment:", error);
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  // Fetch all tables for TABLE restaurants
+  const fetchTables = async () => {
+    try {
+      setLoadingTables(true);
+      const response = await axiosInstance.get("/api/v1/table/all?page=1&limit=100");
+
+      if (response.data.success && response.data.data) {
+        setTables(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching tables:", error);
+      toast.error("Failed to fetch tables. Please try again.");
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  // Fetch orders for a specific table
+  const fetchTableOrders = async (tableId) => {
+    try {
+      console.log(`Fetching orders for table ${tableId}...`);
+      // Add timestamp to prevent caching
+      const response = await axiosInstance.get(`/api/v1/order/verify/${tableId}?_t=${new Date().getTime()}`);
+      
+      console.log("Fetch orders response:", response.data);
+
+      if (response.data?.has_orders && response.data.data?.orders?.length > 0) {
+        
+        // DEBUG: Log the statuses of items to verify backend response
+        const newOrders = response.data.data.orders;
+        newOrders.forEach(o => {
+          o.single_items?.forEach(i => console.log(`Item ${i.item_id} status: ${i.status}`));
+        });
+
+        // Store all orders for displaying
+        setTableOrders(newOrders);
+        
+        // Find the first pending order
+        const pendingOrder = response.data.data.orders.find(
+          (order) => order.status !== "COMPLETED" && order.status !== "CANCELLED"
+        );
+
+        if (pendingOrder) {
+          // Set current table order for adding more items
+          setCurrentTableOrder({
+            id: pendingOrder.id,
+            token: pendingOrder.token,
+            grand_total: pendingOrder.grand_total,
+          });
+        }
+      } else {
+        // Clear orders if none found
+        setTableOrders([]);
+      }
+    } catch (error) {
+      console.error("Error fetching table orders:", error);
+      // Don't show error toast, just continue without existing order
+      setTableOrders([]);
+    }
+  };
+
+  // Fetch active orders for POSTPAID
+  const fetchActivePostpaidOrders = async () => {
+    try {
+      setLoadingPostpaidOrders(true);
+      // Fetch recent orders
+      const response = await axiosInstance.get("/api/v1/order/all?limit=100");
+      if (response.data?.data) {
+        // Filter for non-completed orders
+        const active = response.data.data.filter(
+          (o) => o.status !== "COMPLETED" && o.status !== "CANCELLED"
+        );
+        setActivePostpaidOrders(active);
+      }
+    } catch (error) {
+      console.error("Error fetching postpaid orders:", error);
+    } finally {
+      setLoadingPostpaidOrders(false);
+    }
+  };
+
+  // Select a postpaid order
+  const handlePostpaidOrderSelect = async (order) => {
+    try {
+      // Set current order
+      setCurrentTableOrder({
+        id: order.id,
+        token: order.token,
+        grand_total: order.grand_total,
+      });
+      
+      // Fetch full details for this order to populate items
+      const response = await axiosInstance.get(`/api/v1/order/${order.id}`);
+      if (response.data?.data) {
+         setTableOrders([response.data.data]); // Set as single table order for compatibility
+         setShowTableSelection(false); // Go to main view
+      }
+    } catch (error) {
+      console.error("Error selecting order:", error);
+      toast.error("Failed to load order details");
+    }
+  };
+
+  // Settle Postpaid Order
+  const handleSettleOrder = async () => {
+    if (!currentTableOrder) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to settle Order #${currentTableOrder.token}? This will mark it as PAID and COMPLETED.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await axiosInstance.put("/api/v1/order/complete", {
+        order_id: currentTableOrder.id,
+      });
+
+      if (response.status === 201 || response.status === 200) {
+        toast.success("Order settled successfully!");
+        
+        // Clear state
+        setOrderItems([]);
+        setOrderNotes("");
+        setCurrentTableOrder(null);
+        setTableOrders([]);
+        
+        // Go back to list and refresh
+        setShowTableSelection(true);
+        fetchActivePostpaidOrders();
+      }
+    } catch (error) {
+      console.error("Error settling order:", error);
+      toast.error(error.response?.data?.message || "Failed to settle order");
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!currentTableOrder) return;
+
+    if (!window.confirm("Are you sure you want to CANCEL this order? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const response = await axiosInstance.put("/api/v1/order/cancel", {
+        order_id: currentTableOrder.id,
+      });
+
+      if (response.status === 201 || response.status === 200) {
+        toast.success("Order cancelled successfully");
+        
+        // Reset state
+        setOrderItems([]);
+        setOrderNotes("");
+        setCurrentTableOrder(null);
+        setTableOrders([]);
+
+        // Refresh list
+        if (userData?.restaurant?.type === "POSTPAID") {
+             setShowTableSelection(true); // Go back to list
+             fetchActivePostpaidOrders();
+        } else {
+             // For TABLE - Navigate back to table grid
+             setSelectedTable(null); // Clear selected table
+             setShowTableSelection(true); // Show grid
+             fetchTables(); // Refresh grid status
+        }
+      }
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      toast.error(error.response?.data?.message || "Failed to cancel order");
+    }
+  };
+
+  // Assign waiter to selected table
+  const handleTableSelect = async (table) => {
+    // Check if table is already assigned to current user
+    if (table.assign_waiter === userData?.user?.id && table.work_status === "OCCUPIED") {
+      // Just resume this table without calling API
+      setSelectedTable(table);
+      setShowTableSelection(false);
+      
+      // Check for existing orders
+      await fetchTableOrders(table.id);
+      return;
+    }
+
+    // Otherwise, assign waiter to table
+    try {
+      const response = await axiosInstance.post("/api/v1/table/assign-waiter", {
+        table_id: table.id.toString(),
+      });
+
+      if (response.data.success) {
+        setSelectedTable(response.data.data);
+        setShowTableSelection(false); // Hide table selection, show menu
+        toast.success(`Assigned to Table #${response.data.data.number}`);
+        
+        // Check for existing orders on this table
+        await fetchTableOrders(response.data.data.id);
+      }
+    } catch (error) {
+      console.error("Error assigning waiter:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to assign table. Please try again."
+      );
+    }
+  };
+
+  // Go back to table selection without releasing table
+  const handleBackToTables = () => {
+    setShowTableSelection(true);
+    // Don't clear selectedTable - keep it assigned
+    
+    // For POSTPAID, refresh active orders list
+    if (userData?.restaurant?.type === "POSTPAID") {
+      fetchActivePostpaidOrders();
+    }
+  };
+
+  // Print invoice for current table
+  const handlePrintInvoice = async () => {
+    if (!selectedTable || !currentTableOrder) {
+      toast.warning("No active order to print");
+      return;
+    }
+
+    try {
+      // Fetch detailed order information
+      const response = await axiosInstance.get(`/api/v1/order/${currentTableOrder.id}`);
+
+      if (response.data?.data) {
+        const orderDetails = response.data.data;
+
+        // Filter out CANCELLED items and format for receipt
+        const validSingleItems = (orderDetails.single_items || [])
+          .filter((item) => item.status !== "CANCELLED")
+          .map((item) => ({
+            name: item.product_name,
+            quantity: item.quantity,
+            price: item.unit_price, 
+            total: item.total_price,
+            notes: item.notes,
+            extra: item.extra ? item.extra.map(ex => ({
+                name: ex.name,
+                quantity: ex.quantity,
+                price: ex.unit_price || ex.price
+            })) : []
+          }));
+
+        const validComboItems = (orderDetails.combo_items || [])
+          .filter((item) => item.status !== "CANCELLED")
+          .map((item) => ({
+            name: item.combo_name,
+            quantity: item.quantity,
+            price: item.unit_price,
+            total: item.total_price,
+            notes: item.notes,
+            extra: [] // Combos usually don't have separate extras structure the same way
+          }));
+
+        const combinedItems = [...validSingleItems, ...validComboItems];
+
+        // Navigate to print receipt page with detailed order data
+        const orderData = {
+          id: orderDetails.id,
+          token: orderDetails.token,
+          status: orderDetails.status,
+
+          grand_total: orderDetails.grand_total,
+          notes: orderDetails.notes,
+          created_at: orderDetails.created_at,
+          restaurant: orderDetails.restaurant,
+          items: combinedItems, // Pass unified items array
+          tableNumber: selectedTable.number,
+        };
+
+        const encodedData = encodeURIComponent(JSON.stringify(orderData));
+        window.open(`/print-receipt?token=${orderDetails.token}&data=${encodedData}`, '_blank');
+        
+        toast.success("Invoice opened for printing");
+      } else {
+        toast.warning("No order details found");
+      }
+    } catch (error) {
+      console.error("Error fetching order details for invoice:", error);
+      toast.error("Failed to load invoice. Please try again.");
+    }
+  };
+
+  // Release table / Clear State
+  const handleReleaseTable = async () => {
+    // If POSTPAID, just clear state
+    if (userData?.restaurant?.type === "POSTPAID") {
+        setSelectedTable(null);
+        setCurrentTableOrder(null);
+        setOrderItems([]);
+        setOrderNotes("");
+        setShowTableSelection(true);
+        fetchActivePostpaidOrders();
+        return;
+    }
+
+    if (!selectedTable) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to release Table #${selectedTable.number}? All orders will be marked as completed.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await axiosInstance.post("/api/v1/table/release", {
+        table_id: selectedTable.id.toString(),
+      });
+
+      if (response.data.success) {
+        toast.success(`Table #${selectedTable.number} released successfully`);
+        setSelectedTable(null);
+        setCurrentTableOrder(null); // Clear current order
+        setOrderItems([]);
+        setOrderNotes("");
+        setShowTableSelection(true); // Show table selection again
+        fetchTables(); // Refresh table list
+      }
+    } catch (error) {
+      console.error("Error releasing table:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to release table. Please try again."
+      );
+    }
+  };
+
+  // Update Item Status
+  const updateItemStatus = async (orderId, itemId, newStatus, tableId) => {
+    try {
+      const response = await axiosInstance.put("/api/v1/order/status", {
+        order_id: orderId,
+        item_id: itemId,
+        status: newStatus,
+      });
+
+      
+        toast.success(`Item status updated to ${newStatus}`);
+        
+        console.log("Status updated. Waiting 500ms then refreshing for table:", tableId || selectedTable?.id);
+        
+        // Refresh orders with a small delay to ensure DB update is reflected
+        setTimeout(async () => {
+             const tid = tableId || selectedTable?.id;
+             if (tid && userData?.restaurant?.type === "TABLE") {
+                await fetchTableOrders(tid);
+                fetchTables();
+             } else if (userData?.restaurant?.type === "POSTPAID") {
+                await fetchActivePostpaidOrders();
+                // Refresh specifics for this order
+                try {
+                    const updatedOrder = await axiosInstance.get(`/api/v1/order/${orderId}`);
+                    if (updatedOrder.data?.data) {
+                        setTableOrders([updatedOrder.data.data]);
+                    }
+                } catch (e) {
+                    console.error("Failed to refresh order details", e);
+                }
+             }
+        }, 500);
+      
+    } catch (error) {
+      console.error("Error updating item status:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to update item status."
+      );
+    }
+  };
 
   useEffect(() => {
     fetchAllData();
@@ -280,10 +720,24 @@ export default function CreateOrder() {
 
   const navigate = useNavigate();
 
+  // Handle New Postpaid Order
+  const handleNewPostpaidOrder = () => {
+    setCurrentTableOrder(null);
+    setOrderItems([]);
+    setShowTableSelection(false);
+  };
+
   // Print & Confirm Flow
   const confirmOrder = async () => {
     if (orderItems.length === 0) {
       toast.error("Please add items to your order");
+      return;
+    }
+
+    // For TABLE type restaurants, check if table is selected
+    const isTableRestaurant = userData?.restaurant?.type === "TABLE";
+    if (isTableRestaurant && !selectedTable) {
+      toast.error("Please select a table first");
       return;
     }
 
@@ -311,70 +765,151 @@ export default function CreateOrder() {
           quantity: item.quantity || 1,
         }));
 
-      const payload = {
-        ...(products.length > 0 && { items: products }),
-        ...(combos.length > 0 && { combos }),
-        ...(orderNotes?.trim() && { notes: orderNotes.trim() }),
-      };
-
-      //  Call order API
-      const response = await axiosInstance.post("/api/v1/order/add", payload);
-
-      if (response.data?.data) {
-        const token = response.data.data.token;
-        const orderId = response.data.data.id;
-
-        setGeneratedToken(token);
-        setShowOrderSuccess(true);
-
-        // 2. Prepare order data
-        const orderData = {
-          id: orderId,
-          token: token,
-          items: orderItems.map((item) => ({
-            name: item.name,
-            quantity: item.quantity || 1,
-            price: item.price || 0,
-            type: item.item_type || "PRODUCT",
-            itemNotes: item.itemNotes || "",
-            extra: item.extra || [],
-          })),
-          combos: orderItems
-            .filter((item) => item.item_type === "COMBO")
-            .map((combo) => ({
-              name: combo.name,
-              quantity: combo.quantity || 1,
-              price: combo.price || 0,
-              details: combo.details || [],
-            })),
-          subtotal: calculateSubtotal(),
-          total: calculateTotal(),
-          grand_total: response.data.data.grand_total || calculateTotal(),
-          notes: response.data.data.notes || orderNotes,
-          restaurant: response.data.data.restaurant || "Vivanta",
-          status: response.data.data.status || "PLACED",
-          timestamp:
-            response.data.data.created_at || new Date().toLocaleString(),
+      // Check if we're adding to existing order or creating new one
+      // Check if we're adding to existing order or creating new one
+      if (currentTableOrder && (isTableRestaurant || userData?.restaurant?.type === "POSTPAID")) {
+        // Add items to existing order
+        const payload = {
+          order_id: currentTableOrder.id,
+          ...(products.length > 0 && { items: products }),
+          ...(combos.length > 0 && { combos }),
         };
 
-        const encodedData = encodeURIComponent(JSON.stringify(orderData));
+        const response = await axiosInstance.put("/api/v1/order/add-items", payload);
 
-        setTimeout(() => {
-          navigate(`/print-receipt?token=${token}&data=${encodedData}`);
-        }, 1500);
+        if (response.data?.data) {
+          toast.success(`Items added to order! New total: ₹${response.data.data.new_grand_total}`);
+          
+          // Clear order items after adding
+          setOrderItems([]);
+          setOrderNotes("");
+          
+          // Update current table order with new total
+          setCurrentTableOrder({
+            ...currentTableOrder,
+            grand_total: response.data.data.new_grand_total,
+          });
+          
+          // Refresh orders list to show updated order
+          if (isTableRestaurant && selectedTable) {
+            await fetchTableOrders(selectedTable.id);
+          } else if (userData?.restaurant?.type === "POSTPAID") {
+            await fetchActivePostpaidOrders();
+            // Refresh specifics for this order
+            const updatedOrder = await axiosInstance.get(`/api/v1/order/${currentTableOrder.id}`);
+            if (updatedOrder.data?.data) {
+                setTableOrders([updatedOrder.data.data]);
+            }
+          }
+        }
+      } else {
+        // Create new order
+        const payload = {
+          ...(products.length > 0 && { items: products }),
+          ...(combos.length > 0 && { combos }),
+          ...(orderNotes?.trim() && { notes: orderNotes.trim() }),
+        };
 
-        sendToKitchen(token);
+        // Add table-specific fields for TABLE restaurants
+        if (isTableRestaurant && selectedTable) {
+          payload.order_type = "TABLE";
+          payload.table_id = selectedTable.id;
+          payload.payment_status = "PENDING";
+        }
 
-        // Reset after success
-        // setTimeout(() => {
-        //   setOrderItems([]);
-        //   setOrderNotes("");
-        //   setShowOrderSuccess(false);
-        // }, 5000); // Moved to navigation logic
+        // Call order API using axiosInstance
+        const response = await axiosInstance.post("/api/v1/order/add", payload);
+
+        if (response.data?.data) {
+          const token = response.data.data.token;
+          const orderId = response.data.data.id;
+
+          setGeneratedToken(token);
+          setShowOrderSuccess(true);
+
+          // Store current table order for future additions
+          if ((isTableRestaurant && selectedTable) || userData?.restaurant?.type === "POSTPAID") {
+            setCurrentTableOrder({
+              id: orderId,
+              token: token,
+              grand_total: response.data.data.grand_total,
+            });
+            
+            // Refresh orders list to show new order
+            if (isTableRestaurant && selectedTable) {
+                await fetchTableOrders(selectedTable.id);
+            } else {
+                await fetchActivePostpaidOrders();
+                // Refresh specifics for this newly created order
+                const updatedOrder = await axiosInstance.get(`/api/v1/order/${orderId}`);
+                if (updatedOrder.data?.data) {
+                    setTableOrders([updatedOrder.data.data]);
+                }
+            }
+          }
+
+          // 2. Prepare order data
+          const orderData = {
+            id: orderId,
+            token: token,
+            items: orderItems.map((item) => ({
+              name: item.name,
+              quantity: item.quantity || 1,
+              price: item.price || 0,
+              type: item.item_type || "PRODUCT",
+              itemNotes: item.itemNotes || "",
+              extra: item.extra || [],
+            })),
+            combos: orderItems
+              .filter((item) => item.item_type === "COMBO")
+              .map((combo) => ({
+                name: combo.name,
+                quantity: combo.quantity || 1,
+                price: combo.price || 0,
+                details: combo.details || [],
+              })),
+            subtotal: calculateSubtotal(),
+            total: calculateTotal(),
+            grand_total: response.data.data.grand_total || calculateTotal(),
+            notes: response.data.data.notes || orderNotes,
+            restaurant: response.data.data.restaurant || "Vivanta",
+            status: response.data.data.status || "PLACED",
+            timestamp:
+              response.data.data.created_at || new Date().toLocaleString(),
+            tableNumber: selectedTable?.number || null,
+          };
+
+          const encodedData = encodeURIComponent(JSON.stringify(orderData));
+
+          // For TABLE/POSTPAID messages
+          if (isTableRestaurant || userData?.restaurant?.type === "POSTPAID") {
+            // Just clear the order items after success
+            setTimeout(() => {
+              setOrderItems([]);
+              setOrderNotes("");
+              setShowOrderSuccess(false);
+            }, 2000);
+          } else {
+            // For QSR (Prepaid), auto-navigate to print
+            setTimeout(() => {
+              navigate(`/print-receipt?token=${token}&data=${encodedData}`);
+            }, 1500);
+          }
+
+          sendToKitchen(token);
+
+          // Reset after success
+          // setTimeout(() => {
+          //   setOrderItems([]);
+          //   setOrderNotes("");
+          //   setShowOrderSuccess(false);
+          // }, 5000); // Moved to navigation logic
+        }
       }
     } catch (error) {
       console.error("Order API Failed:", error);
-      alert("Failed to place order. Please try again.");
+      const errorMessage = error.response?.data?.message || "Failed to place order. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setPlacingOrder(false);
     }
@@ -396,6 +931,19 @@ export default function CreateOrder() {
 
   return (
     <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 p-4 md:p-8">
+      {/* Toast Container for notifications */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
+
       {/* Success Toast */}
       <AnimatePresence>
         {showOrderSuccess && (
@@ -437,8 +985,535 @@ export default function CreateOrder() {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      {/* Selection Screen (Table or Active Orders) */}
+      {showTableSelection ? (
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                  {userData?.restaurant?.type === "POSTPAID" ? (
+                      <>
+                        <Clock className="w-8 h-8 text-amber-500" />
+                        Active Orders
+                      </>
+                  ) : (
+                      <>
+                        <TableProperties className="w-8 h-8 text-amber-500" />
+                        Select a Table
+                      </>
+                  )}
+                </h1>
+                <p className="text-gray-600 mt-1">
+                   {userData?.restaurant?.type === "POSTPAID"
+                    ? "Select an existing order to modify or start a new one"
+                    : "Choose a table to start taking orders"}
+                </p>
+              </div>
+              <button
+                onClick={userData?.restaurant?.type === "POSTPAID" ? fetchActivePostpaidOrders : fetchTables}
+                disabled={loadingTables || loadingPostpaidOrders}
+                className="px-4 py-2 bg-white border-2 border-amber-200 text-gray-700 font-semibold rounded-lg hover:bg-amber-50 hover:border-amber-300 transition-all flex items-center gap-2"
+              >
+                <RefreshCw className={`w-5 h-5 ${(loadingTables || loadingPostpaidOrders) ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Content Grid */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            {(loadingTables || loadingPostpaidOrders) ? (
+              <div className="text-center py-20">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+                <p className="mt-4 text-gray-600">Loading...</p>
+              </div>
+            ) : userData?.restaurant?.type === "POSTPAID" ? (
+               /* POSTPAID - Active Orders Grid */
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 {/* New Order Card */}
+                 <div
+                   onClick={handleNewPostpaidOrder}
+                   className="bg-white rounded-2xl p-6 shadow-sm border-2 border-dashed border-amber-300 flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:border-amber-500 transition-all min-h-[200px]"
+                 >
+                   <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                     <Plus className="w-8 h-8 text-amber-600" />
+                   </div>
+                   <h3 className="text-xl font-bold text-gray-900">New Order</h3>
+                   <p className="text-gray-500">Start fresh order</p>
+                 </div>
+
+                 {/* Active Orders List */}
+                 {activePostpaidOrders.map((order) => (
+                    <div
+                     key={order.id}
+                     onClick={() => handlePostpaidOrderSelect(order)}
+                     className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-amber-300 transition-all min-h-[200px] flex flex-col justify-between"
+                    >
+                       <div>
+                           <div className="flex justify-between items-start mb-4">
+                             <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-bold">
+                               Token #{order.token}
+                             </span>
+                             <span className="text-xs text-gray-400">
+                                {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                             </span>
+                           </div>
+                           <div className="space-y-2 mb-4">
+                              <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+                                 <span className="text-gray-600 text-sm">Status</span>
+                                 <span className={`text-sm font-bold ${
+                                     order.status === 'READY' ? 'text-green-600' : 
+                                     order.status === 'PREPARING' ? 'text-amber-600' : 
+                                     'text-blue-600'
+                                 }`}>{order.status}</span>
+                              </div>
+                              <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+                                 <span className="text-gray-600 text-sm">Items</span>
+                                 <span className="font-semibold text-gray-800">
+                                     {(order.single_items?.length || 0) + (order.combo_items?.length || 0)}
+                                 </span>
+                              </div>
+                           </div>
+                       </div>
+                       
+                       <div className="pt-4 border-t border-gray-100 flex justify-between items-end">
+                           <div className="text-xs text-gray-400">Total Amount</div>
+                           <div className="font-bold text-2xl text-gray-900">₹{order.grand_total}</div>
+                       </div>
+                    </div>
+                 ))}
+               </div>
+            ) : (
+              /* TABLE - Tables Grid */
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {tables.map((table) => (
+                  <motion.div
+                    key={table.id}
+                    whileHover={{ scale: table.assign_waiter === userData?.user?.id || table.work_status === "AVAILABLE" ? 1.02 : 1 }}
+                    className={`relative bg-white border-2 rounded-2xl p-6 shadow-lg transition-all ${
+                      table.assign_waiter === userData?.user?.id
+                        ? "border-blue-400 hover:border-blue-500 cursor-pointer hover:shadow-xl"
+                        : table.work_status === "AVAILABLE"
+                        ? "border-green-200 hover:border-green-400 cursor-pointer hover:shadow-xl"
+                        : "border-gray-300 opacity-60 cursor-not-allowed"
+                    }`}
+                    onClick={() => {
+                      if (table.assign_waiter === userData?.user?.id || table.work_status === "AVAILABLE") {
+                        handleTableSelect(table);
+                      }
+                    }}
+                  >
+                    {/* Status Badge */}
+                    <div className="absolute -top-3 -right-3">
+                      <span
+                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 shadow-md ${
+                          table.work_status === "AVAILABLE"
+                            ? "bg-green-100 text-green-800 border-green-300"
+                            : "bg-gray-100 text-gray-800 border-gray-300"
+                        }`}
+                      >
+                        {table.work_status === "AVAILABLE" ? (
+                          <>
+                            <CheckCircle2 className="w-3 h-3" />
+                            AVAILABLE
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="w-3 h-3" />
+                            OCCUPIED
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Table Number */}
+                    <div className="flex items-center justify-center mb-4">
+                      <div
+                        className={`w-20 h-20 rounded-full flex items-center justify-center ${
+                          table.work_status === "AVAILABLE"
+                            ? "bg-green-50 border-4 border-green-300"
+                            : "bg-gray-50 border-4 border-gray-300"
+                        }`}
+                      >
+                        <span className="text-3xl font-bold text-gray-800">
+                          {table.number}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Table Info */}
+                    <div className="text-center">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">
+                        Table #{table.number}
+                      </h3>
+                      {table.assign_waiter === userData?.user?.id ? (
+                        <div className="flex items-center justify-center gap-2 text-sm font-semibold text-green-600">
+                          <User className="w-4 h-4" />
+                          <span>Your Table</span>
+                        </div>
+                      ) : table.assign_waiter ? (
+                        <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                          <User className="w-4 h-4" />
+                          <span>Occupied</span>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-400">Click to assign</div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </div>
+      ) : (
+        <>
+          {/* Info Banner - Table or Order */}
+          {((selectedTable && userData?.restaurant?.type === "TABLE") || (currentTableOrder && userData?.restaurant?.type === "POSTPAID")) && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 mr-96"
+            >
+              <div className="rounded-xl p-4 border-2 bg-green-50 border-green-300 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <TableProperties className="w-6 h-6 text-green-600" />
+                  <div>
+                    <p className="font-semibold text-green-900">
+                      {userData?.restaurant?.type === "TABLE" 
+                       ? `Table #${selectedTable.number} - Active` 
+                       : `Order #${currentTableOrder.token} - Active`}
+                    </p>
+                    {currentTableOrder ? (
+                      <p className="text-sm text-green-700">
+                         Total: ₹{currentTableOrder.grand_total}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-green-700">
+                        Ready to take first order
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleBackToTables}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-600 text-white font-semibold rounded-lg hover:from-amber-600 hover:to-yellow-700 shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    Back to List
+                  </button>
+                  <button
+                    onClick={handlePrintInvoice}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print Invoice
+                  </button>
+                   {/* Cancel Button - Available for both TABLE and POSTPAID if order exists */}
+                   {currentTableOrder && (
+                      <button
+                        onClick={handleCancelOrder}
+                        className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:from-red-600 hover:to-red-700 shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                      >
+                        Cancel Order
+                      </button>
+                   )}
+                  {userData?.restaurant?.type === "POSTPAID" ? (
+                     <button
+                     onClick={handleSettleOrder}
+                     disabled={tableOrders.some(order => 
+                         order.status !== 'COMPLETED' && 
+                         (order.single_items || []).concat(order.combo_items || []).some(item => 
+                             !["DELIVERED", "CANCELLED"].includes(item.status)
+                         )
+                     )}
+                     className={`px-4 py-2 bg-gradient-to-r text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all ${
+                         tableOrders.some(order => 
+                             order.status !== 'COMPLETED' && 
+                             (order.single_items || []).concat(order.combo_items || []).some(item => 
+                                 !["DELIVERED", "CANCELLED"].includes(item.status)
+                             )
+                         )
+                         ? "from-gray-400 to-gray-500 cursor-not-allowed"
+                         : "from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                     }`}
+                   >
+                     Settle Order
+                   </button>
+                  ) : (
+                    <button
+                        onClick={handleReleaseTable}
+                        disabled={tableOrders.some(order => 
+                            order.status !== 'COMPLETED' && 
+                            (order.single_items || []).concat(order.combo_items || []).some(item => 
+                                !["DELIVERED", "CANCELLED"].includes(item.status)
+                            )
+                        )}
+                        className={`px-4 py-2 bg-gradient-to-r text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all ${
+                            tableOrders.some(order => 
+                                order.status !== 'COMPLETED' && 
+                                (order.single_items || []).concat(order.combo_items || []).some(item => 
+                                    !["DELIVERED", "CANCELLED"].includes(item.status)
+                                )
+                            )
+                            ? "from-gray-400 to-gray-500 cursor-not-allowed"
+                            : "from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+                        }`}
+                    >
+                        Release Table
+                    </button>
+                  )}
+                  
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Orders Section - Show orders for the selected table or postpaid order */}
+          {((selectedTable && userData?.restaurant?.type === "TABLE") || (currentTableOrder && userData?.restaurant?.type === "POSTPAID")) && tableOrders.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6"
+            >
+              <div className="bg-white rounded-xl p-6 border-2 border-blue-200 shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <ChefHat className="w-6 h-6 text-blue-600" />
+                    Active Orders {userData?.restaurant?.type === "TABLE" && selectedTable ? `for Table #${selectedTable.number}` : ""}
+                  </h3>
+                  <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full">
+                    {tableOrders.length} Order{tableOrders.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  {tableOrders.map((order) => (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="border-2 rounded-lg p-4 border-gray-300 bg-gray-50"
+                    >
+                      {/* Order Header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-white border-2 border-current rounded-lg px-3 py-1">
+                            <span className="text-lg font-bold text-gray-900">
+                              {/* Show Table No if Table Restaurant, else Token */}
+                              {order.restaurant?.type === "TABLE" && selectedTable?.number ? (
+                                <>Table: {selectedTable.number}</>
+                              ) : (
+                                <>Token: #{order.token}</>
+                              )}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">
+                              Order ID: {order.id}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(order.created_at).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col items-end gap-2">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              order.status === "PLACED"
+                                ? "bg-blue-100 text-blue-800"
+                                : order.status === "PREPARING"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : order.status === "READY"
+                                ? "bg-green-100 text-green-800"
+                                : order.status === "SERVED"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                           Order Status : {order.status}
+                          </span>
+
+                        </div>
+                      </div>
+
+                      {/* Order Items */}
+                      <div className="space-y-2 mb-3">
+                        {order.single_items && order.single_items.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-700 mb-2">Items:</h4>
+                            {order.single_items.map((item, idx) => (
+                              <div
+                                key={item.item_id || idx}
+                                className="flex items-center justify-between bg-white rounded-lg p-2 mb-2 border border-gray-200"
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-gray-900">
+                                      {item.product_name}
+                                    </span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                        item.status === "PENDING"
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : item.status === "PREPARING"
+                                          ? "bg-blue-100 text-blue-800"
+                                          : item.status === "READY"
+                                          ? "bg-green-100 text-green-800"
+                                          : item.status === "CANCELLED"
+                                          ? "bg-red-100 text-red-800"
+                                          : item.status === "DELIVERED"
+                                          ? "bg-gray-100 text-gray-800"
+                                          : "bg-gray-100 text-gray-800"
+                                      }`}
+                                    >
+                                      {item.status}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-500">
+                                    ₹{item.price} × {item.quantity}
+                                  </p>
+                                  {item.notes && (
+                                    <p className="text-xs text-gray-600 italic mt-1">
+                                      Note: {item.notes}
+                                    </p>
+                                  )}
+                                  {item.extra && item.extra.length > 0 && (
+                                    <p className="text-xs text-gray-600 mt-1">
+                                      Extras: {item.extra.length} item(s)
+                                    </p>
+                                  )}
+                                </div>
+                                  <div className="text-right flex items-center gap-3">
+                                  {item.status === "PENDING" && (
+                                    <button
+                                      onClick={() => updateItemStatus(order.id, item.item_id, "CANCELLED", selectedTable?.id)}
+                                      className="px-2 py-1 text-xs font-bold text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
+                                  {item.status === "READY" || ((userData?.restaurant?.type === "TABLE" || userData?.restaurant?.type === "POSTPAID") && !["DELIVERED", "CANCELLED"].includes(item.status)) ? (
+                                    <button
+                                      onClick={() => updateItemStatus(order.id, item.item_id, "DELIVERED", selectedTable?.id)}
+                                      className="px-2 py-1 text-xs font-bold text-white bg-green-500 rounded hover:bg-green-600 transition-colors"
+                                    >
+                                      Delivered
+                                    </button>
+                                  ) : null}
+                                  <p className="font-bold text-gray-900">
+                                    ₹{item.total}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {order.combo_items && order.combo_items.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-700 mb-2">Combos:</h4>
+                            {order.combo_items.map((combo, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between bg-white rounded-lg p-2 mb-2 border border-orange-200"
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-gray-900">
+                                      {combo.combo_name}
+                                    </span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                        combo.status === "PENDING"
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : combo.status === "PREPARING" || combo.status === "COOKING"
+                                          ? "bg-blue-100 text-blue-800"
+                                          : combo.status === "READY"
+                                          ? "bg-green-100 text-green-800"
+                                          : combo.status === "CANCELLED"
+                                          ? "bg-red-100 text-red-800"
+                                          : combo.status === "DELIVERED"
+                                          ? "bg-gray-100 text-gray-800"
+                                          : "bg-gray-100 text-gray-800"
+                                      }`}
+                                    >
+                                      {combo.status || "PENDING"}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-500">
+                                    ₹{combo.price} × {combo.quantity}
+                                  </p>
+                                  {combo.notes && (
+                                    <p className="text-xs text-gray-600 italic mt-1">
+                                      Note: {combo.notes}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="text-right flex items-center gap-3">
+                                  {(!combo.status || combo.status === "PENDING") && (
+                                    <button
+                                      onClick={() => updateItemStatus(order.id, combo.item_id, "CANCELLED", selectedTable?.id)}
+                                      className="px-2 py-1 text-xs font-bold text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
+                                  {combo.status === "READY" || ((userData?.restaurant?.type === "TABLE" || userData?.restaurant?.type === "POSTPAID") && !["DELIVERED", "CANCELLED"].includes(combo.status)) ? (
+                                    <button
+                                      onClick={() => updateItemStatus(order.id, combo.item_id, "DELIVERED", selectedTable?.id)}
+                                      className="px-2 py-1 text-xs font-bold text-white bg-green-500 rounded hover:bg-green-600 transition-colors"
+                                    >
+                                      Delivered
+                                    </button>
+                                  ) : null}
+                                  <p className="font-bold text-gray-900">
+                                    ₹{combo.total}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Order Total */}
+                      <div className="pt-3 border-t-2 border-dashed border-gray-300">
+                        <div className="flex items-center justify-between">
+                          <span className="text-lg font-bold text-gray-900">
+                            Grand Total:
+                          </span>
+                          <span className="text-2xl font-bold text-green-600">
+                            ₹{order.grand_total}
+                          </span>
+                        </div>
+                        {order.notes && (
+                          <p className="text-sm text-gray-600 mt-2 italic">
+                            Order Note: {order.notes}
+                          </p>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
           {/* Search Bar */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1155,6 +2230,8 @@ export default function CreateOrder() {
           </div>
         </div>
       </motion.footer>
+        </>
+      )}
     </div>
   );
 }

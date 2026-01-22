@@ -81,7 +81,11 @@ const PrintReceipt = () => {
 
           <div className="border-b border-dashed border-black my-2"></div>
 
-          <p className="font-bold">TOKEN : {orderData.token}</p>
+          {restaurant.type === "TABLE" ? (
+             <p className="font-bold">TABLE NO : {orderData.tableNumber}</p>
+          ) : (
+             <p className="font-bold">TOKEN : {orderData.token}</p>
+          )}
           <p className="text-xs">
             {new Date(orderData.created_at).toLocaleString()}
           </p>
@@ -96,9 +100,9 @@ const PrintReceipt = () => {
 
             <div className="flex justify-between text-xs">
               <span>
-                {item.quantity} x {item.price}
+                {item.quantity} x {Number(item.price || 0).toFixed(2)}
               </span>
-              <span>{item.quantity * item.price}</span>
+              <span>{(Number(item.quantity || 0) * Number(item.price || 0)).toFixed(2)}</span>
             </div>
 
             {item.notes && (
@@ -116,9 +120,9 @@ const PrintReceipt = () => {
 
                     <div className="flex justify-between pl-4">
                       <span>
-                        {extra.quantity} x {extra.price}
+                        {extra.quantity} x {Number(extra.price || 0).toFixed(2)}
                       </span>
-                      <span>{extra.quantity * extra.price}</span>
+                      <span>{(Number(extra.quantity || 0) * Number(extra.price || 0)).toFixed(2)}</span>
                     </div>
                   </div>
                 ))}
@@ -131,7 +135,7 @@ const PrintReceipt = () => {
 
         <div className="flex justify-between font-bold text-lg">
           <span>TOTAL</span>
-          <span>{orderData.grand_total}</span>
+          <span>{Number(orderData.grand_total || 0).toFixed(2)}</span>
         </div>
 
         <div className="border-b border-dashed border-black my-2"></div>

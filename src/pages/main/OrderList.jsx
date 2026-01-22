@@ -35,7 +35,7 @@ const OrderList = () => {
   const [pagination, setPagination] = useState({
     total: 0,
     page: 1,
-    limit: 10,
+    limit: 50,
     totalPages: 1,
     hasNextPage: false,
   });
@@ -94,7 +94,7 @@ const OrderList = () => {
           response.data.pagination || {
             total: response.data.data.length,
             page: 1,
-            limit: 10,
+            limit: 50,
             totalPages: 1,
             hasNextPage: false,
           }
@@ -196,7 +196,7 @@ const OrderList = () => {
 
         fetchOrders();
 
-        console.log("Order status updated successfully");
+
       }
     } catch (error) {
       console.error("Error updating order status:", error);
@@ -687,7 +687,8 @@ const calculateTotalItems = (order) => {
                                       Single Items
                                     </h5>
                                     <div className="space-y-3">
-                                      {orderDetails[order.id].single_items.map(
+                                      {orderDetails[order.id].single_items
+                                        .map(
                                         (item, idx) => (
                                           <div
                                             key={item.item_id || idx}
@@ -703,13 +704,16 @@ const calculateTotalItems = (order) => {
                                                 {item.unit_price || item.price}
                                               </p>
                                             </div>
-                                            <p className="font-semibold text-gray-900">
-                                              ₹
-                                              {item.total_price ||
-                                                item.quantity *
-                                                  (item.price ||
-                                                    item.unit_price)}
-                                            </p>
+                                            <div className="text-right">
+                                              <p className={`font-semibold ${item.status === 'CANCELLED' ? 'text-red-500 line-through' : 'text-gray-900'}`}>{item.status}</p>
+                                              <p className="font-semibold text-gray-900">
+                                                ₹
+                                                {item.total_price ||
+                                                  item.quantity *
+                                                    (item.price ||
+                                                      item.unit_price)}
+                                              </p>
+                                            </div>
                                           </div>
                                         )
                                       )}
@@ -724,7 +728,8 @@ const calculateTotalItems = (order) => {
                                     <h5 className="font-medium text-gray-800 mb-3 text-sm uppercase tracking-wide">
                                       Combo Items
                                     </h5>
-                                    {orderDetails[order.id].combo_items.map(
+                                    {orderDetails[order.id].combo_items
+                                      .map(
                                       (combo, comboIdx) => (
                                         <div
                                           key={combo.item_id || comboIdx}
@@ -783,6 +788,7 @@ const calculateTotalItems = (order) => {
                                                           Qty: {detail.quantity}
                                                         </p>
                                                       </div>
+                                                      <span className="text-xs text-gray-500 line-through">{detail.status}</span>
                                                       <span className="text-xs text-gray-500 line-through">
                                                         ₹
                                                         {

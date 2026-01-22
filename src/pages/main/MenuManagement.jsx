@@ -88,6 +88,8 @@ export default function MenuManagement() {
   const [comboForm, setComboForm] = useState({
     name: "",
     price: "",
+    type: "VEG",
+    description: "",
     items: [],
   });
   const [comboPage, setComboPage] = useState(1);
@@ -594,6 +596,8 @@ export default function MenuManagement() {
         id: editComboId, // ✅ only used for update
         name: comboForm.name.trim(),
         price: Number(comboForm.price),
+        type: comboForm.type,
+        description: comboForm.description,
         items: itemsPayload,
       };
 
@@ -606,6 +610,8 @@ export default function MenuManagement() {
         await axiosInstance.post("/api/v1/combo/add", {
           name: payload.name,
           price: payload.price,
+          type: payload.type,
+          description: payload.description,
           items: payload.items,
         });
         toast.success("Combo added successfully!");
@@ -627,7 +633,10 @@ export default function MenuManagement() {
 
     setComboForm({
       name: combo.name || "",
+
       price: combo.price?.toString() || "",
+      type: combo.type || "VEG",
+      description: combo.description || "",
       items: (combo.details || []).map((detail) => ({
         id: detail.product_id,
         name: detail.product_name,
@@ -651,6 +660,8 @@ export default function MenuManagement() {
     setComboForm({
       name: "",
       price: "",
+      type: "VEG",
+      description: "",
       items: [],
     });
     setEditComboId(null);
@@ -1525,7 +1536,46 @@ export default function MenuManagement() {
                             />
                           </div>
                         </div>
+
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                            Combo Type <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={comboForm.type}
+                            onChange={(e) =>
+                              setComboForm({
+                                ...comboForm,
+                                type: e.target.value,
+                              })
+                            }
+                            className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none transition bg-white"
+                          >
+                            <option value="VEG">Vegetarian</option>
+                            <option value="NONVEG">Non-Vegetarian</option>
+                          </select>
+                        </div>
+
                       </div>
+                    </div>
+                    
+                    {/* Description Section */}
+                    <div className="mb-8 p-5 bg-white rounded-xl border border-yellow-200">
+                      <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                        Description <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        value={comboForm.description}
+                        onChange={(e) =>
+                          setComboForm({
+                            ...comboForm,
+                            description: e.target.value,
+                          })
+                        }
+                        placeholder="Describe what's included in this combo..."
+                        rows="3"
+                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none transition bg-white"
+                      />
                     </div>
 
                     {/* Available Items Grid */}

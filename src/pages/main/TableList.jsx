@@ -289,7 +289,13 @@ const TableList = () => {
                       <TableCell>{row.table_no}</TableCell>
                       <TableCell>{statusChip(row.status)}</TableCell>
                       <TableCell>{workStatusChip(row.work_status)}</TableCell>
-                      <TableCell>{row.assign_waiter || "-"}</TableCell>
+                      <TableCell>
+                        {row.waiter
+                          ? `${row.waiter.first_name || ""} ${
+                              row.waiter.last_name || ""
+                            }`
+                          : "-"}
+                      </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <IconButton

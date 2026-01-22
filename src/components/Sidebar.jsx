@@ -18,25 +18,35 @@ import {
   Analytics as AnalyticsIcon,
   Settings as SettingsIcon,
 } from "@mui/icons-material";
-import TableBarRoundedIcon from '@mui/icons-material/TableBarRounded';
+import TableBarRoundedIcon from "@mui/icons-material/TableBarRounded";
 import FastfoodIcon from "@mui/icons-material/Fastfood";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { FiLogOut } from "react-icons/fi";
 
-const Sidebar = ({ drawerWidth, mobileOpen, handleDrawerToggle, isMobile }) => {
+const Sidebar = ({
+  drawerWidth,
+  mobileOpen,
+  handleDrawerToggle,
+  isMobile,
+  userData,
+}) => {
   const navigate = useNavigate();
   const handleLogout = () => {
     localStorage.clear();
     navigate("/login", { replace: true });
   };
+
   const menuItems = [
     { path: "/dashboard", label: "Dashboard", icon: <DashboardIcon /> },
     { path: "/create_order", label: "Create Order", icon: <FastfoodIcon /> },
     { path: "/orders", label: "Orders", icon: <AssignmentIcon /> },
     { path: "/menu", label: "Menu", icon: <RestaurantIcon /> },
     { path: "/settings", label: "Settings", icon: <SettingsIcon /> },
-    { path: "/tables", label: "Tables", icon: <TableBarRoundedIcon /> },
+
+    ...(userData?.restaurant?.type === "TABLE"
+      ? [{ path: "/tables", label: "Tables", icon: <TableBarRoundedIcon /> }]
+      : []),
   ];
 
   const drawer = (
