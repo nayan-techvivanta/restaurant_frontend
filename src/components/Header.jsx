@@ -24,49 +24,13 @@ import {
   Settings,
 } from "@mui/icons-material";
 import axios from "axios";
+import axiosInstance from "../api/axiosInstance";
 
-const Header = ({ drawerWidth, handleDrawerToggle }) => {
+const Header = ({ drawerWidth, handleDrawerToggle, userData }) => {
   const [anchorEl, setAnchorEl] = useState(null);
-  const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const userMenuOpen = Boolean(anchorEl);
-
-  // Fetch user profile data
-  const fetchUserProfile = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get("/api/v1/user/", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-      console.log("API Response:", response.data); // Debug log
-      setUserData(response.data.data);
-    } catch (err) {
-      console.error("Profile fetch error:", err);
-      // Fallback data for testing
-      setUserData({
-        user: {
-          first_name: "adarsh",
-          last_name: "mehta",
-          email: "adarshmehta@gmail.com",
-        },
-        restaurant: {
-          name: "Golden Spoon",
-          city: "Ahmedabad",
-          state: "Gujarat",
-        },
-        role: "OWNER",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUserProfile();
-  }, []);
 
   const handleProfileMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);

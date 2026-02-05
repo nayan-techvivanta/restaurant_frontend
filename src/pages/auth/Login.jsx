@@ -69,10 +69,10 @@ export default function Login() {
       );
 
       // ✅ ONLY check if userId exists
-      if (!userId || !accessToken) {
-        toast.error("Login failed. Missing required user data.");
-        return;
-      }
+      // if (!userId || !accessToken) {
+      //   toast.error("Login failed. Missing required user data.");
+      //   return;
+      // }
 
       localStorage.setItem("access_token", accessToken);
       // ✅ Store user data for verification page
