@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef,useCallback  } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiTrash2,
@@ -26,6 +26,8 @@ import { MdCategory, MdFastfood, MdFoodBank } from "react-icons/md";
 import axiosInstance from "../../api/axiosInstance";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { FileUploader } from "react-drag-drop-files";
+import Cropper from 'react-easy-crop'
 
 const initialData = {
   categories: [],
@@ -41,6 +43,73 @@ const YellowSwitch = styled(Switch)(({ theme }) => ({
     backgroundColor: "#facc15",
   },
 }));
+
+const createImage = (url) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", (error) => reject(error));
+    image.setAttribute("crossOrigin", "anonymous"); // needed to avoid cross-origin issues on CodeSandbox
+    image.src = url;
+  });
+
+function getRadianAngle(degreeValue) {
+  return (degreeValue * Math.PI) / 180;
+}
+
+/**
+ * This function was adapted from the one in the ReadMe of https://github.com/DominicTobias/react-image-crop
+ * @param {File} image - Image File url
+ * @param {Object} pixelCrop - pixelCrop Object provided by react-easy-crop
+ * @param {number} rotation - optional rotation parameter
+ */
+async function getCroppedImg(imageSrc, pixelCrop, rotation = 0) {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const maxSize = Math.max(image.width, image.height);
+  const safeArea = 2 * ((maxSize / 2) * Math.sqrt(2));
+
+  // set each dimensions to double largest dimension to allow for a safe area for the
+  // image to rotate in without being clipped by canvas context
+  canvas.width = safeArea;
+  canvas.height = safeArea;
+
+  // translate canvas context to a central location on image to allow rotating around the center.
+  ctx.translate(safeArea / 2, safeArea / 2);
+  ctx.rotate(getRadianAngle(rotation));
+  ctx.translate(-safeArea / 2, -safeArea / 2);
+
+  // draw rotated image and store data.
+  ctx.drawImage(
+    image,
+    safeArea / 2 - image.width * 0.5,
+    safeArea / 2 - image.height * 0.5
+  );
+  const data = ctx.getImageData(0, 0, safeArea, safeArea);
+
+  // set canvas width to final desired crop size - this will clear existing context
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  // paste generated rotate image with correct offsets for x,y crop values.
+  ctx.putImageData(
+    data,
+    Math.round(0 - safeArea / 2 + image.width * 0.5 - pixelCrop.x),
+    Math.round(0 - safeArea / 2 + image.height * 0.5 - pixelCrop.y)
+  );
+
+  // As Base64 string
+  // return canvas.toDataURL('image/jpeg');
+
+  // As a blob
+  return new Promise((resolve) => {
+    canvas.toBlob((file) => {
+      resolve(file);
+    }, "image/jpeg");
+  });
+}
 
 export default function MenuManagement() {
   const [categories, setCategories] = useState([]);
@@ -82,6 +151,78 @@ export default function MenuManagement() {
     totalPages: 1,
     limit: 10,
   });
+
+  const fileTypes = ["JPG", "PNG", "GIF"];
+  const [imageSrc, setImageSrc] = useState(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+
+  // Add upload context state
+  const [uploadContext, setUploadContext] = useState("MENU_ITEM"); // 'MENU_ITEM' or 'COMBO'
+
+  const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleFileChange = async (file, context = "MENU_ITEM") => {
+    if (file) {
+      setUploadContext(context);
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        setImageSrc(reader.result);
+      });
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const performCrop = async () => {
+    try {
+      const croppedImageBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
+      
+      const formData = new FormData();
+      formData.append("file", croppedImageBlob, "cropped_image.jpg");
+      formData.append("file_type", "image");
+      formData.append("product_id", "1"); // Static value as requested
+
+      const response = await axiosInstance.post("/api/v1/media/", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      console.log("Upload Response:", response.data);
+
+      if (response.data?.data) {
+        if (uploadContext === "COMBO") {
+          setComboForm((prev) => ({
+             ...prev,
+             image: response.data.data,
+          }));
+        } else {
+          setMenuItemForm((prev) => ({
+            ...prev,
+            image: response.data.data,
+          }));
+        }
+        
+        toast.success("Image uploaded successfully!");
+      }
+      
+      // Reset cropper & file input
+      setImageSrc(null);
+      setZoom(1);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to crop/upload image");
+    }
+  };
+
+  const handleCropCancel = () => {
+    setImageSrc(null);
+    setZoom(1);
+  };
+
   // Add this state near other loading states
   const [menuStatusLoading, setMenuStatusLoading] = useState({});
 
@@ -91,6 +232,7 @@ export default function MenuManagement() {
     type: "VEG",
     description: "",
     items: [],
+    image: null,
   });
   const [comboPage, setComboPage] = useState(1);
   const [comboSearch, setComboSearch] = useState("");
@@ -312,6 +454,7 @@ export default function MenuManagement() {
             originalPrice: combo.original_price,
             savingsPercentage: combo.savings_percentage,
             details: combo.details || [],
+            image: combo.image,
           }))
         );
 
@@ -471,12 +614,14 @@ export default function MenuManagement() {
         sku: Number(menuItemForm.sku),
         category_id: Number(menuItemForm.categoryId),
         description: menuItemForm.description || "",
+        image: menuItemForm.image || null,
       };
 
       if (editMenuItemId) {
         payload = {
           ...payload,
           id: editMenuItemId,
+          // image: menuItemForm.image || null, // Include image in update payload if needed
         };
 
         await axiosInstance.put("/api/v1/product/update", payload);
@@ -494,6 +639,7 @@ export default function MenuManagement() {
                     )?.name || "",
                   isVegetarian: menuItemForm.isVegetarian,
                   isAvailable: menuItemForm.isAvailable,
+                  image: menuItemForm.image || null, 
                 }
               : item
           )
@@ -545,6 +691,7 @@ export default function MenuManagement() {
       categoryId: item.categoryId || "",
       isVegetarian: item.isVegetarian,
       isAvailable: item.isAvailable,
+      image: item.image || null,
     });
 
     document
@@ -567,6 +714,7 @@ export default function MenuManagement() {
       categoryId: "",
       isVegetarian: true,
       isAvailable: true,
+      image: null,
     });
 
     setEditMenuItemId(null);
@@ -599,6 +747,7 @@ export default function MenuManagement() {
         type: comboForm.type,
         description: comboForm.description,
         items: itemsPayload,
+        image: comboForm.image || null,
       };
 
       if (editComboId) {
@@ -613,6 +762,7 @@ export default function MenuManagement() {
           type: payload.type,
           description: payload.description,
           items: payload.items,
+          image: payload.image,
         });
         toast.success("Combo added successfully!");
       }
@@ -643,6 +793,7 @@ export default function MenuManagement() {
         price: Number(detail.price || 0),
         quantity: Number(detail.quantity || 1),
       })),
+      image: combo.image || null,
     });
 
     document
@@ -663,6 +814,7 @@ export default function MenuManagement() {
       type: "VEG",
       description: "",
       items: [],
+      image: null,
     });
     setEditComboId(null);
   };
@@ -1142,7 +1294,12 @@ export default function MenuManagement() {
                             },
                         }}
                       />
+                      
                     </div>
+
+                  
+
+                   
 
                     {/* ACTIVE / INACTIVE Switch */}
                     <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-300 bg-white mt-3">
@@ -1172,6 +1329,9 @@ export default function MenuManagement() {
                         }
                       />
                     </div>
+                     <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white mt-3">
+                       <FileUploader handleChange={handleFileChange} name="file" types={fileTypes} />
+                     </div>
                   </div>
                 </div>
 
@@ -1192,6 +1352,7 @@ export default function MenuManagement() {
                     Clear Form
                   </button>
                 </div>
+                 
               </div>
 
               {/* Menu Items List */}
@@ -1280,13 +1441,22 @@ export default function MenuManagement() {
                                 : "bg-linear-to-b from-yellow-50 to-orange-50"
                             }`}
                           >
-                            <MdFastfood
-                              className={`text-4xl transition-all ${
-                                !item.isAvailable
-                                  ? "text-gray-300"
-                                  : "text-yellow-500 group-hover:scale-110"
-                              }`}
-                            />
+                            {item.image && (
+                              <img
+                                src={`${import.meta.env.VITE_IMAGE_BASE_URL}/${item.image}`}
+                                alt={item.name}
+                                className="w-full h-full object-contain"
+                              />
+                            )}
+                            {!item.image  && (
+                              <MdFastfood
+                                className={`text-4xl transition-all ${
+                                  !item.isAvailable
+                                    ? "text-gray-300"
+                                    : "text-yellow-500 group-hover:scale-110"
+                                }`}
+                              />
+                            )}
 
                             {/* Medium Badges */}
                             <div className="absolute top-3 right-3 flex flex-col gap-1 text-center">
@@ -1576,6 +1746,33 @@ export default function MenuManagement() {
                         rows="3"
                         className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none transition bg-white"
                       />
+                    </div>
+
+                    {/* Combo Image Upload */}
+                    <div className="mb-8 p-5 bg-white rounded-xl border border-yellow-200">
+                      <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                        Combo Image
+                      </label>
+                      <FileUploader
+                        handleChange={(file) => handleFileChange(file, "COMBO")}
+                        name="file"
+                        types={fileTypes}
+                      />
+                      {comboForm.image && (
+                         <div className="mt-4 relative w-32 h-32 rounded-lg overflow-hidden border border-gray-200">
+                            <img 
+                              src={`${import.meta.env.VITE_IMAGE_BASE_URL}/${comboForm.image}`}
+                              alt="Combo Preview" 
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              onClick={() => setComboForm({...comboForm, image: null})}
+                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                            >
+                              <FiX size={12} />
+                            </button>
+                         </div>
+                      )}
                     </div>
 
                     {/* Available Items Grid */}
@@ -2056,13 +2253,13 @@ export default function MenuManagement() {
                         >
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-4">
-                              <div className="w-16 h-16 bg-linear-to-r from-yellow-500 to-yellow-400 rounded-lg flex items-center justify-center">
-                                <img
-                                  src={ComboIcon}
-                                  alt={combo.name}
-                                  className="w-10 h-10 object-cover rounded-md"
-                                />
-                              </div>
+                                <div className="w-16 h-16 bg-linear-to-r from-yellow-500 to-yellow-400 rounded-lg flex items-center justify-center overflow-hidden">
+                                  <img
+                                    src={combo.image ? `${import.meta.env.VITE_IMAGE_BASE_URL}/${combo.image}` : ComboIcon}
+                                    alt={combo.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
                               <div>
                                 <h3 className="font-bold text-xl text-gray-800">
                                   {combo.name}
@@ -2220,6 +2417,54 @@ export default function MenuManagement() {
           )}
         </AnimatePresence>
       </div>
+      
+      {/* Image Cropper Modal - Global */}
+      {imageSrc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-[500px]">
+            <div className="relative w-full h-[300px] bg-gray-100 rounded-lg overflow-hidden mb-4">
+              <Cropper
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={1 / 1}
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                onZoomChange={setZoom}
+              />
+            </div>
+            
+            <div className="flex justify-between items-center mb-4">
+                <span className="text-sm font-medium text-gray-700">Zoom</span>
+                <input
+                type="range"
+                value={zoom}
+                min={1}
+                max={3}
+                step={0.1}
+                aria-labelledby="Zoom"
+                onChange={(e) => setZoom(e.target.value)}
+                className="w-2/3"
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCropCancel}
+                className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={performCrop}
+                className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
+              >
+                Crop & Upload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

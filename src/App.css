@@ -28,3 +28,10 @@ input:-webkit-autofill:active {
   }
 }
 
+.dyxtms {
+  width: 100% !important;
+  padding-top: 50px !important;
+  padding-bottom: 50px !important;
+  padding-left: 40px !important;
+  padding-right: 40px !important;
+}

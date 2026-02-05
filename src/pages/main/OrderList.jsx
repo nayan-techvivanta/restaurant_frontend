@@ -319,6 +319,97 @@ const calculateTotalItems = (order) => {
     }
   };
 
+  const [userData, setUserData] = useState(null);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await axiosInstance.get("/api/v1/user/");
+        if (response.data?.data) {
+          setUserData(response.data.data);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  const handlePrintInvoice = async (order) => {
+    try {
+      // Check if restaurant type is TABLE or POSTPAID
+      const isTableOrPostpaid = 
+        userData?.restaurant?.type === "TABLE" || 
+        userData?.restaurant?.type === "POSTPAID";
+
+      if (!isTableOrPostpaid) {
+         window.print();
+         return;
+      }
+
+      // Fetch detailed order information
+      const response = await axiosInstance.get(`/api/v1/order/${order.id}`);
+
+      if (response.data?.data) {
+        const orderDetails = response.data.data;
+
+        // Filter out CANCELLED items and format for receipt
+        const validSingleItems = (orderDetails.single_items || [])
+          .filter((item) => item.status !== "CANCELLED")
+          .map((item) => ({
+            name: item.product_name,
+            quantity: item.quantity,
+            price: item.unit_price, 
+            total: item.total_price,
+            notes: item.notes,
+            extra: item.extra ? item.extra.map(ex => ({
+                name: ex.name,
+                quantity: ex.quantity,
+                price: ex.unit_price || ex.price
+            })) : []
+          }));
+
+        const validComboItems = (orderDetails.combo_items || [])
+          .filter((item) => item.status !== "CANCELLED")
+          .map((item) => ({
+            name: item.combo_name,
+            quantity: item.quantity,
+            price: item.unit_price,
+            total: item.total_price,
+            notes: item.notes,
+            extra: [] // Combos usually don't have separate extras structure the same way
+          }));
+
+        const combinedItems = [...validSingleItems, ...validComboItems];
+
+        // Navigate to print receipt page with detailed order data
+        const orderData = {
+          id: orderDetails.id,
+          token: orderDetails.token,
+          status: orderDetails.status,
+
+          grand_total: orderDetails.grand_total,
+          notes: orderDetails.notes,
+          created_at: orderDetails.created_at,
+          restaurant: orderDetails.restaurant,
+          items: combinedItems, // Pass unified items array
+          tableNumber: order.table_number || "N/A", // Use table number from order if available
+        };
+
+        const encodedData = encodeURIComponent(JSON.stringify(orderData));
+        window.open(`/print-receipt?token=${orderDetails.token}&data=${encodedData}`, '_blank');
+        
+        // toast.success("Invoice opened for printing");
+      } else {
+        // toast.warning("No order details found");
+      }
+    } catch (error) {
+      console.error("Error fetching order details for invoice:", error);
+      // toast.error("Failed to load invoice. Please try again.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 p-4 md:p-6">
       {/* Header */}
@@ -859,17 +950,19 @@ const calculateTotalItems = (order) => {
                                   )}
                                 </div>
 
-                                <div className="flex gap-3">
+
+
+                                  <div className="flex gap-3">
                                   <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
-                                    onClick={() => window.print()}
+                                    onClick={() => handlePrintInvoice(order)}
                                     className="flex-1 px-4 py-3 bg-amber-500 text-white font-medium rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
                                   >
                                     <Printer className="w-4 h-4" />
                                     Print Receipt
                                   </motion.button>
-                                </div>
+                                  </div>
                               </div>
                             </div>
                           </div>

@@ -27,7 +27,7 @@ import DeleteForeverRoundedIcon from "@mui/icons-material/DeleteForeverRounded";
 import "react-toastify/dist/ReactToastify.css";
 
 // API CONFIGURATION
-const API_BASE_URL = "https://x81b1d9j-4000.inc1.devtunnels.ms/api/v1";
+const API_BASE_URL = import.meta.env.VITE_BASE_URL;
 
 const TableList = () => {
   const [tables, setTables] = useState([]);
@@ -64,7 +64,7 @@ const TableList = () => {
       setLoading(true);
       // API is likely 1-indexed, MUI is 0-indexed
       const response = await axios.get(
-        `${API_BASE_URL}/table/all?page=${page + 1}&limit=${rowsPerPage}`,
+        `${API_BASE_URL}/api/v1/table/all?page=${page + 1}&limit=${rowsPerPage}`,
         getAuthHeader()
       );
 
@@ -129,7 +129,7 @@ const TableList = () => {
 
     try {
       const response = await axios.delete(
-        `${API_BASE_URL}/table/${id}`,
+        `${API_BASE_URL}/api/v1/table/${id}`,
         getAuthHeader()
       );
 
@@ -156,11 +156,11 @@ const TableList = () => {
         const payload = {
           id: selectedRow.id,
           number: formData.table_no,
-          status: formData.status ? "ACTIVE" : "DEACTIVE",
+          status: formData.status ? "ACTIVE" : "INACTIVE",
         };
 
         const response = await axios.put(
-          `${API_BASE_URL}/table/update`,
+          `${API_BASE_URL}/api/v1/table/update`,
           payload,
           getAuthHeader()
         );
@@ -176,7 +176,7 @@ const TableList = () => {
         };
 
         const response = await axios.post(
-          `${API_BASE_URL}/table/add`,
+          `${API_BASE_URL}/api/v1/table/add`,
           payload,
           getAuthHeader()
         );
@@ -208,7 +208,7 @@ const TableList = () => {
 
   const statusChip = (status) => (
     <Chip
-      label={status ? "Active" : "Deactive"}
+      label={status ? "Active" : "INACTIVE"}
       color={status ? "success" : "default"}
       size="small"
       variant="outlined"
@@ -364,7 +364,7 @@ const TableList = () => {
                   color="success"
                 />
               }
-              label={formData.status ? "Active" : "Deactive"}
+              label={formData.status ? "Active" : "INACTIVE"}
             />
           )}
         </DialogContent>

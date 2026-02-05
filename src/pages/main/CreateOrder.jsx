@@ -814,7 +814,7 @@ export default function CreateOrder() {
         if (isTableRestaurant && selectedTable) {
           payload.order_type = "TABLE";
           payload.table_id = selectedTable.id;
-          payload.payment_status = "PENDING";
+          // payload.payment_status = "PENDING";
         }
 
         // Call order API using axiosInstance
@@ -1179,7 +1179,7 @@ export default function CreateOrder() {
       ) : (
         <>
           {/* Info Banner - Table or Order */}
-          {((selectedTable && userData?.restaurant?.type === "TABLE") || (currentTableOrder && userData?.restaurant?.type === "POSTPAID")) && (
+          {(selectedTable || (currentTableOrder && userData?.restaurant?.type === "POSTPAID")) && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1280,7 +1280,7 @@ export default function CreateOrder() {
           )}
 
           {/* Orders Section - Show orders for the selected table or postpaid order */}
-          {((selectedTable && userData?.restaurant?.type === "TABLE") || (currentTableOrder && userData?.restaurant?.type === "POSTPAID")) && tableOrders.length > 0 && (
+          {(selectedTable || (currentTableOrder && userData?.restaurant?.type === "POSTPAID")) && tableOrders.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1647,59 +1647,84 @@ export default function CreateOrder() {
                   {foodItems.map((item) => (
                     <motion.div
                       key={item.id}
-                      className="group relative bg-linear-to-b from-white to-amber-50 border-2 border-amber-100 rounded-2xl p-5 hover:shadow-2xl hover:border-[#F5C857]"
+                      className="group relative bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-xl hover:border-amber-300 transition-all duration-300"
                     >
-                      {/* Category Badge */}
-                      {item.category_name && (
-                        <div className="absolute -top-2 -right-2 bg-linear-to-r from-gray-600 to-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
-                          {item.category_name}
+                      {/* Image Preview */}
+                      <div className="w-full h-48 bg-gray-100 relative overflow-hidden">
+                        {item.image ? (
+                          <img
+                            src={`${import.meta.env.VITE_IMAGE_BASE_URL}/${
+                              item.image
+                            }`}
+                            alt={item.name}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            onError={(e) => {
+                              e.target.style.display = "none";
+                              e.target.nextSibling.style.display = "flex";
+                            }}
+                          />
+                        ) : null}
+                        
+                         {/* Fallback / Placeholder (shown if no image or error) */}
+                        <div 
+                          className={`w-full h-full flex items-center justify-center bg-amber-50 text-amber-300 ${item.image ? 'hidden' : 'flex'}`}
+                        >
+                             {item.item_type === "COMBO" ? (
+                                <MdOutlineFastfood size={48} />
+                             ) : (
+                                <IoRestaurantOutline size={48} />
+                             )}
                         </div>
-                      )}
 
-                      {item.sku && (
-                        <div className="absolute -top-3 -left-2 bg-linear-to-r from-yellow-500 to-yellow-600 text-white rounded-full shadow-lg px-2 py-1.5 flex items-center justify-center">
-                          <span className="text-sm font-semibold">
+                        {/* Category Badge */}
+                        {item.category_name && (
+                          <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1 rounded-full">
+                            {item.category_name}
+                          </div>
+                        )}
+                         {/* SKU Badge */}
+                        {item.sku && (
+                          <div className="absolute top-2 left-2 bg-[#F5C857] text-white text-xs font-bold px-2 py-1 rounded-md shadow-sm">
                             {item.sku}
-                          </span>
-                        </div>
-                      )}
+                          </div>
+                        )}
+                      </div>
 
-                      <div className="mb-4">
+                      <div className="p-4">
                         <div className="flex justify-between items-start mb-2">
-                          <h3 className="font-bold text-gray-900 text-lg group-hover:text-[#D4A63A]">
+                          <h3 className="font-bold text-gray-900 text-lg group-hover:text-[#D4A63A] line-clamp-1">
                             {item.name}
                           </h3>
-                          {item.item_type === "COMBO" && (
-                            <div className="flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
-                              Save {item.savings_percentage}%
+                        </div>
+                        
+                         {item.item_type === "COMBO" && (
+                            <div className="mb-2">
+                               <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                                Save {item.savings_percentage}%
+                               </span>
                             </div>
                           )}
-                        </div>
-                        <p className="text-gray-600 text-sm line-clamp-2">
+
+                        <p className="text-gray-500 text-sm line-clamp-2 mb-4 h-10">
                           {item.details
                             ? "Combo Deal - Multiple items"
                             : item.description || "Delicious vegetarian dish"}
                         </p>
-                      </div>
 
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                          <div className="text-2xl font-bold text-[#F5C857]">
-                            ₹{item.price}
-                            {/* {item.market_price && (
-                              <span className="text-sm text-gray-400 line-through ml-2">
-                                ₹{item.market_price}
-                              </span>
-                            )} */}
+                        <div className="flex justify-between items-center mt-auto">
+                          <div className="flex items-center gap-4">
+                            <div className="text-xl font-bold text-gray-900">
+                              ₹{item.price}
+                            </div>
                           </div>
+                          <button
+                            onClick={() => addToOrder(item)}
+                            className="px-4 py-2 bg-[#F5C857] text-white font-semibold rounded-xl hover:bg-[#d4a63a] hover:shadow-lg transform active:scale-95 transition-all flex items-center gap-2"
+                          >
+                            <Plus className="w-5 h-5" />
+                            Add
+                          </button>
                         </div>
-                        <button
-                          onClick={() => addToOrder(item)}
-                          className="px-4 py-2 bg-linear-to-r from-[#F5C857] to-[#F8D775] text-white font-semibold rounded-xl hover:shadow-lg hover:scale-105 transition-all flex items-center gap-2"
-                        >
-                          <Plus className="w-5 h-5" />
-                          Add
-                        </button>
                       </div>
                     </motion.div>
                   ))}
