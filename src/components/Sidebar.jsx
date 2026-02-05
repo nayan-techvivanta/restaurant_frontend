@@ -64,8 +64,9 @@ const Sidebar = ({
           src={logo}
           alt="Vivanta Logo"
           sx={{
-            width: { xs: "70px", sm: "80px", md: "100px" },
+            width: { xs: "60px", sm: "70px", md: "90px" },
             height: "auto",
+            padding: "15px",
             objectFit: "contain",
             mx: "auto",
           }}

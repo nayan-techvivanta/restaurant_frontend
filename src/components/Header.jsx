@@ -57,7 +57,7 @@ const Header = ({ drawerWidth, handleDrawerToggle, userData }) => {
         WebkitBackdropFilter: "blur(20px)",
         borderBottom: "2px solid rgba(0, 0, 0, 0.08)",
         boxShadow: "none",
-        height: "84px",
+        height: "92px",
         zIndex: (theme) => theme.zIndex.drawer + 1,
       }}
     >
@@ -197,7 +197,7 @@ const Header = ({ drawerWidth, handleDrawerToggle, userData }) => {
                 {userData?.user
                   ? getInitials(
                       userData.user.first_name,
-                      userData.user.last_name
+                      userData.user.last_name,
                     )
                   : "AM"}
               </Avatar>

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import axiosInstance from "../../api/axiosInstance";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import Logo from "../../assets/images/Loginpage/Logo.png";
+import Logo from "../../assets/images/Loginpage/logo.png";
 import bg02 from "../../assets/images/Loginpage/bg02.jpg";
 
 export default function Login() {
@@ -65,7 +65,7 @@ export default function Login() {
         "Email Verified:",
         isEmailVerified,
         "Access Token:",
-        accessToken
+        accessToken,
       );
 
       // ✅ ONLY check if userId exists
@@ -79,7 +79,7 @@ export default function Login() {
       localStorage.setItem("temp_user_id", userId);
       localStorage.setItem(
         "temp_user_email",
-        userData?.email || formData.email
+        userData?.email || formData.email,
       );
       localStorage.setItem("temp_user_data", JSON.stringify(userData));
 

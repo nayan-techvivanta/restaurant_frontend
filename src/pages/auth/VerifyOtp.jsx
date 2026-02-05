@@ -12,7 +12,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import axiosInstance from "../../api/axiosInstance";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import Logo from "../../assets/images/Loginpage/Logo.png";
+import Logo from "../../assets/images/Loginpage/logo.png";
 import bg02 from "../../assets/images/Loginpage/bg02.jpg";
 
 const OTPInput = ({ code, setCode }) => {
@@ -90,7 +90,7 @@ export default function VerifyOtp() {
     } catch (error) {
       console.error(
         "Failed to fetch latest OTP:",
-        error.response?.data || error.message
+        error.response?.data || error.message,
       );
       toast.error("Failed to fetch latest OTP", { toastId: "fetch-otp-fail" });
     }
@@ -172,7 +172,7 @@ export default function VerifyOtp() {
         {
           otp_id: otpId,
           otp: code,
-        }
+        },
       );
 
       console.log("Verification Response:", response.data);
