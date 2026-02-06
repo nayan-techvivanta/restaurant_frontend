@@ -190,11 +190,11 @@ export default function Login() {
             <img
               src={Logo}
               alt="Hotel Vivanta Logo"
-              className="w-24 sm:w-32 md:w-36 lg:w-40 xl:w-44 object-contain drop-shadow-lg"
+              className="w-24 sm:w-32 md:w-36 lg:w-36 xl:w-36 object-contain drop-shadow-lg"
             />
           </div>
 
-          <div className="text-center mb-6 sm:mb-8">
+          <div className="text-center mb-6 sm:mb-8 mt-3">
             <p className="text-gray-300 text-sm sm:text-base">
               Sign in to continue your journey
             </p>
