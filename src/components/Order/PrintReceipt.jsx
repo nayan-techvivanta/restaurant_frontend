@@ -82,7 +82,7 @@ const PrintReceipt = () => {
           <div className="border-b border-dashed border-black my-2"></div>
 
           {restaurant.type === "TABLE" ? (
-             <p className="font-bold">TABLE NO : {orderData.tableNumber}</p>
+             <p className="font-bold">TABLE NO : {orderData.table_no}</p>
           ) : (
              <p className="font-bold">TOKEN : {orderData.token}</p>
           )}

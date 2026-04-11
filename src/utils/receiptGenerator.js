@@ -22,6 +22,10 @@ export const generateReceipt = (orderData) => {
   const encoder = new EscPosEncoder();
   const r = orderData.restaurant || {};
 
+  const token = r.type === "TABLE" 
+    ? `TABLE NO : ${orderData.table_no}` 
+    : `TOKEN : ${orderData.token}`;
+
   const receipt = encoder.initialize().codepage("cp437");
 
   /* ===== HEADER ===== */
@@ -39,7 +43,8 @@ export const generateReceipt = (orderData) => {
   /* ===== TOKEN ===== */
   receipt.align("left").bold(true);
   receipt.size(2, 2);
-  receipt.line(`TOKEN NO: ${orderData.token}`);
+  // receipt.line(`TOKEN NO: ${orderData.token}`);
+  receipt.line(token)
   receipt.size(1, 1);
   receipt.bold(false);
 

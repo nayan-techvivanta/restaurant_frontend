@@ -388,7 +388,7 @@ const calculateTotalItems = (order) => {
           id: orderDetails.id,
           token: orderDetails.token,
           status: orderDetails.status,
-
+          table_no: orderDetails.table_no,
           grand_total: orderDetails.grand_total,
           notes: orderDetails.notes,
           created_at: orderDetails.created_at,
